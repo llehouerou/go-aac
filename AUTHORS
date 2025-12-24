@@ -1,0 +1,34 @@
+# go-aac Authors
+
+This project is a Go port of FAAD2 (Freeware Advanced Audio Decoder).
+
+## Go Port
+
+Laurent Le Houerou <laurent@lehouerou.net>
+ - Go implementation
+
+## Original FAAD2 Authors
+
+Code from FAAD2 is copyright (c) Nero AG, www.nero.com
+
+The original FAAD2 was written by:
+
+M. Bakker <mbakker@nero.com>
+ - Complete library
+
+Alexander Kurpiers <a.kurpiers@nt.tu-darmstadt.de>
+ - HCR (Huffman Codeword Reordering) code
+ - DRM (Digital Radio Mondiale) support
+ - Bug fixes
+
+Volker Fischer <v.fischer@nt.tu-darmstadt.de>
+ - DRM code
+ - Bug fixes
+
+Gian-Carlo Pascutto <gpascutto@nero.com>
+ - DRM Parametric Stereo code
+ - Bug fixes
+
+## Original Source
+
+FAAD2: https://github.com/knik0/faad2

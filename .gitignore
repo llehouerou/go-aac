@@ -1,0 +1,25 @@
+# Generated test data (regenerate with: make testdata)
+testdata/generated/
+
+# Documentation (internal reference)
+docs/
+
+# Test coverage
+coverage.out
+
+# IDE
+.idea/
+.vscode/
+.claude/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.exe
+*.test
+*.out
