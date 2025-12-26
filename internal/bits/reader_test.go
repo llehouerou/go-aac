@@ -210,3 +210,80 @@ func TestReader_ShowBits_EdgeCases(t *testing.T) {
 		t.Errorf("ShowBits(17) crossing boundary = 0x%X, want 0x%X", got, expected)
 	}
 }
+
+func TestReader_FlushBits(t *testing.T) {
+	data := []byte{0xFF, 0x0F, 0xAB, 0xCD, 0x12, 0x34, 0x56, 0x78}
+	r := NewReader(data)
+
+	// Initial state: bitsLeft = 32
+	if r.BitsLeft() != 32 {
+		t.Fatalf("Initial BitsLeft = %d, want 32", r.BitsLeft())
+	}
+
+	// Flush 8 bits
+	r.FlushBits(8)
+	if r.BitsLeft() != 24 {
+		t.Errorf("After flush 8: BitsLeft = %d, want 24", r.BitsLeft())
+	}
+
+	// Now ShowBits should return 0x0FABCD (next 24 bits)
+	got := r.ShowBits(24)
+	if got != 0x0FABCD {
+		t.Errorf("After flush 8: ShowBits(24) = 0x%X, want 0x0FABCD", got)
+	}
+}
+
+func TestReader_FlushBits_CrossBuffer(t *testing.T) {
+	data := []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xAA, 0xBB, 0xCC, 0xDD, 0x11, 0x22, 0x33, 0x44}
+	r := NewReader(data)
+
+	// Flush 40 bits (crosses from bufa into bufb, triggers reload)
+	r.FlushBits(40)
+
+	// Now bufa should have bufb's value shifted, bufb reloaded
+	// After 40 bits, we should see 0xBBCCDD11
+	got := r.ShowBits(32)
+	expected := uint32(0xBBCCDD11)
+	if got != expected {
+		t.Errorf("After flush 40: ShowBits(32) = 0x%X, want 0x%X", got, expected)
+	}
+}
+
+func TestReader_GetBits(t *testing.T) {
+	data := []byte{0xFF, 0x0F, 0xAB, 0xCD}
+	r := NewReader(data)
+
+	// Get 8 bits
+	got := r.GetBits(8)
+	if got != 0xFF {
+		t.Errorf("GetBits(8) = 0x%X, want 0xFF", got)
+	}
+
+	// Get next 8 bits
+	got = r.GetBits(8)
+	if got != 0x0F {
+		t.Errorf("GetBits(8) = 0x%X, want 0x0F", got)
+	}
+
+	// Get next 16 bits
+	got = r.GetBits(16)
+	if got != 0xABCD {
+		t.Errorf("GetBits(16) = 0x%X, want 0xABCD", got)
+	}
+}
+
+func TestReader_GetBits_Zero(t *testing.T) {
+	data := []byte{0xFF, 0x0F}
+	r := NewReader(data)
+
+	got := r.GetBits(0)
+	if got != 0 {
+		t.Errorf("GetBits(0) = %d, want 0", got)
+	}
+
+	// Verify no bits consumed
+	got = r.GetBits(8)
+	if got != 0xFF {
+		t.Errorf("After GetBits(0), GetBits(8) = 0x%X, want 0xFF", got)
+	}
+}

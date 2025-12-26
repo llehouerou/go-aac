@@ -112,3 +112,49 @@ func (r *Reader) ShowBits(n uint) uint32 {
 	return ((r.bufa & ((1 << r.bitsLeft) - 1)) << bitsFromBufb) |
 		(r.bufb >> (32 - bitsFromBufb))
 }
+
+// FlushBits discards n bits from the stream.
+//
+// Ported from: faad_flushbits() in ~/dev/faad2/libfaad/bits.h:115-127
+// and faad_flushbits_ex() in ~/dev/faad2/libfaad/bits.c:123-144
+func (r *Reader) FlushBits(n uint) {
+	if r.err {
+		return
+	}
+
+	if n < uint(r.bitsLeft) {
+		r.bitsLeft -= uint32(n)
+		return
+	}
+
+	// Need to reload buffer
+	r.flushBitsEx(n)
+}
+
+// flushBitsEx handles flushing when we need to reload from buffer.
+//
+// Ported from: faad_flushbits_ex() in ~/dev/faad2/libfaad/bits.c:123-144
+func (r *Reader) flushBitsEx(n uint) {
+	// Move bufb to bufa
+	r.bufa = r.bufb
+	// Load next word into bufb
+	r.bufb = r.loadWord(r.pos)
+	r.pos += 4
+
+	// Adjust bits left: we gained 32 bits from new bufa, consumed n
+	r.bitsLeft += 32 - uint32(n)
+}
+
+// GetBits reads and returns n bits from the stream.
+// n must be 0-32.
+//
+// Ported from: faad_getbits() in ~/dev/faad2/libfaad/bits.h:130-146
+func (r *Reader) GetBits(n uint) uint32 {
+	if n == 0 {
+		return 0
+	}
+
+	ret := r.ShowBits(n)
+	r.FlushBits(n)
+	return ret
+}
