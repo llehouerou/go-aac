@@ -73,6 +73,67 @@ The alicebob/alac library was ported from C and had several translation bugs:
 2. **Sign extension**: C bitfield tricks like `struct { signed int x:24; }` need explicit bit manipulation in Go: `(v << 8) >> 8`
 3. **Buffer sizing**: Verify slice bounds carefully when translating pointer arithmetic
 
+## Porting Fixed Value Tables (MANDATORY)
+
+**When porting lookup tables from FAAD2, copy values EXACTLY and validate against the source.**
+
+### Rules for Table Porting
+
+1. **Copy values exactly**: Do not recalculate, round, or "improve" table values. FAAD2's tables are the reference.
+
+2. **Preserve precision**: If FAAD2 uses `float`, use `float32`. If it uses `double`, use `float64`. Match the source.
+
+3. **One-to-one correspondence**: Every table in Go must map directly to a table in FAAD2. Document the source location.
+
+4. **Validate at build/test time**: Write tests that verify table values match FAAD2 exactly.
+
+### Validation Process
+
+For each ported table:
+
+1. **Document the source**:
+   ```go
+   // iq_table contains inverse quantization lookup values.
+   // Copied from: ~/dev/faad2/libfaad/specrec.c:42-300 (iq_table[8192])
+   var iq_table = [8192]float32{
+       // ...
+   }
+   ```
+
+2. **Write a validation test**:
+   ```go
+   func TestIQTableMatchesFAAD2(t *testing.T) {
+       // Load expected values extracted from FAAD2
+       expected := loadFAAD2Table("iq_table.bin")
+
+       for i, got := range iq_table {
+           if got != expected[i] {
+               t.Errorf("iq_table[%d]: got %v, want %v", i, got, expected[i])
+           }
+       }
+   }
+   ```
+
+3. **Extract reference data from FAAD2**: Use the debug tool or a simple C program to dump table values to binary files for comparison.
+
+### Common Tables to Port
+
+| FAAD2 Source | Table | Purpose |
+|--------------|-------|---------|
+| `specrec.c` | `iq_table` | Inverse quantization (x^4/3) |
+| `huffman.h` | `hcb_*` | Huffman codebooks |
+| `kbd_win.h` | `kbd_*` | Kaiser-Bessel derived windows |
+| `sine_win.h` | `sine_*` | Sine windows |
+| `cfft_tab.h` | `cfft_tab_*` | FFT twiddle factors |
+| `mdct_tab.h` | `mdct_tab_*` | MDCT coefficients |
+
+### What NOT to Do
+
+- Do NOT regenerate tables using Go math functions (results may differ due to floating-point)
+- Do NOT reorder or restructure tables (index mapping must match FAAD2)
+- Do NOT "optimize" by reducing precision or changing types
+- Do NOT skip validation because "the values look right"
+
 ## Development Workflow: Test-Driven Development (MANDATORY)
 
 **All code changes MUST follow TDD. No exceptions.**
