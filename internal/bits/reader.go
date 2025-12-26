@@ -89,3 +89,26 @@ func (r *Reader) Error() bool {
 func (r *Reader) BitsLeft() uint32 {
 	return r.bitsLeft
 }
+
+// ShowBits returns the next n bits without consuming them.
+// n must be 0-32.
+//
+// Ported from: faad_showbits() in ~/dev/faad2/libfaad/bits.h:102-113
+func (r *Reader) ShowBits(n uint) uint32 {
+	if n == 0 {
+		return 0
+	}
+
+	if n <= uint(r.bitsLeft) {
+		// All bits available in bufa
+		// Shift bufa left to align MSB, then right to get n bits
+		return (r.bufa << (32 - r.bitsLeft)) >> (32 - n)
+	}
+
+	// Need bits from both bufa and bufb
+	bitsFromBufb := n - uint(r.bitsLeft)
+	// Get remaining bits from bufa (mask and shift left)
+	// Then get needed bits from bufb (shift right)
+	return ((r.bufa & ((1 << r.bitsLeft) - 1)) << bitsFromBufb) |
+		(r.bufb >> (32 - bitsFromBufb))
+}
