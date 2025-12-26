@@ -322,3 +322,41 @@ func TestReader_Get1Bit_CrossBuffer(t *testing.T) {
 		t.Errorf("Get1Bit() at bit 33 = %d, want 1", got)
 	}
 }
+
+func TestReader_ByteAlign(t *testing.T) {
+	data := []byte{0xFF, 0xAB, 0xCD, 0xEF}
+	r := NewReader(data)
+
+	// Already aligned - should skip 0 bits
+	skipped := r.ByteAlign()
+	if skipped != 0 {
+		t.Errorf("ByteAlign() when aligned = %d, want 0", skipped)
+	}
+
+	// Read 3 bits, then align - should skip 5 bits
+	_ = r.GetBits(3)
+	skipped = r.ByteAlign()
+	if skipped != 5 {
+		t.Errorf("ByteAlign() after 3 bits = %d, want 5", skipped)
+	}
+
+	// Now we should be at byte 1 (0xAB)
+	got := r.GetBits(8)
+	if got != 0xAB {
+		t.Errorf("After align: GetBits(8) = 0x%X, want 0xAB", got)
+	}
+}
+
+func TestReader_ByteAlign_AfterFullByte(t *testing.T) {
+	data := []byte{0xFF, 0xAB}
+	r := NewReader(data)
+
+	// Read 8 bits (full byte)
+	_ = r.GetBits(8)
+
+	// Already aligned
+	skipped := r.ByteAlign()
+	if skipped != 0 {
+		t.Errorf("ByteAlign() after 8 bits = %d, want 0", skipped)
+	}
+}

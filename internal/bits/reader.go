@@ -172,3 +172,22 @@ func (r *Reader) Get1Bit() uint8 {
 	// bitsLeft == 0, need to reload
 	return uint8(r.GetBits(1))
 }
+
+// ByteAlign aligns the bit position to the next byte boundary.
+// Returns the number of bits skipped (0-7).
+//
+// Ported from: faad_byte_align() in ~/dev/faad2/libfaad/bits.c:111-121
+func (r *Reader) ByteAlign() uint8 {
+	// Calculate how many bits we've consumed in the current byte.
+	// bitsLeft counts down from 32, so (32 - bitsLeft) is bits consumed.
+	// We want the remainder when divided by 8 (i.e., position within current byte).
+	remainder := (32 - r.bitsLeft) & 7
+
+	if remainder == 0 {
+		return 0
+	}
+
+	skip := 8 - remainder
+	r.FlushBits(uint(skip))
+	return uint8(skip)
+}
