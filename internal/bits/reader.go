@@ -251,3 +251,18 @@ func (r *Reader) ResetBits(bits uint32) {
 	r.bitsLeft = 32 - remainder
 	r.err = false
 }
+
+// RemainingBits returns the number of unread bits in the buffer.
+func (r *Reader) RemainingBits() uint32 {
+	totalBits := uint32(r.bufferSize * 8)
+	consumed := r.GetProcessedBits()
+	if consumed >= totalBits {
+		return 0
+	}
+	return totalBits - consumed
+}
+
+// BitsAvailable returns true if at least n bits remain unread.
+func (r *Reader) BitsAvailable(n uint32) bool {
+	return r.RemainingBits() >= n
+}

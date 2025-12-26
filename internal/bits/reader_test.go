@@ -571,3 +571,61 @@ func TestReader_ResetBits_BeyondBuffer(t *testing.T) {
 		t.Error("ResetBits beyond buffer should set error flag")
 	}
 }
+
+func TestReader_RemainingBits(t *testing.T) {
+	data := []byte{0xFF, 0x0F, 0xAB, 0xCD}
+	r := NewReader(data)
+
+	// Initial: 32 bits available
+	if got := r.RemainingBits(); got != 32 {
+		t.Errorf("Initial remaining = %d, want 32", got)
+	}
+
+	// Read 12 bits
+	_ = r.GetBits(12)
+	if got := r.RemainingBits(); got != 20 {
+		t.Errorf("After 12 bits: remaining = %d, want 20", got)
+	}
+}
+
+func TestReader_BufferOverrun(t *testing.T) {
+	data := []byte{0xFF, 0x0F} // Only 16 bits
+	r := NewReader(data)
+
+	// Read all 16 bits - should not error
+	_ = r.GetBits(16)
+	if r.Error() {
+		t.Error("Should not error after reading available bits")
+	}
+
+	// Try to read more - implementation may or may not error
+	// but should not panic
+	_ = r.GetBits(8) // Reading past end
+
+	// Reading well past end
+	_ = r.GetBits(32)
+	// Should have set error or returned zeros gracefully
+}
+
+func TestReader_BitsAvailable(t *testing.T) {
+	data := []byte{0xFF, 0x0F, 0xAB, 0xCD} // 32 bits
+	r := NewReader(data)
+
+	if !r.BitsAvailable(32) {
+		t.Error("Should have 32 bits available initially")
+	}
+
+	if r.BitsAvailable(33) {
+		t.Error("Should not have 33 bits available")
+	}
+
+	_ = r.GetBits(16)
+
+	if !r.BitsAvailable(16) {
+		t.Error("Should have 16 bits available after reading 16")
+	}
+
+	if r.BitsAvailable(17) {
+		t.Error("Should not have 17 bits available after reading 16")
+	}
+}
