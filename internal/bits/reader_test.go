@@ -399,3 +399,69 @@ func TestReader_GetProcessedBits_CrossBuffer(t *testing.T) {
 		t.Errorf("After 40 bits: position = %d, want 40", got)
 	}
 }
+
+func TestReader_GetBitBuffer(t *testing.T) {
+	data := []byte{0xFF, 0x0F, 0xAB, 0xCD, 0x12, 0x34}
+	r := NewReader(data)
+
+	// Skip 4 bits, then read 16 bits as bytes
+	_ = r.GetBits(4)
+	buf := r.GetBitBuffer(16)
+
+	// After skipping 4 bits (0xF from 0xFF), next 16 bits are:
+	// 1111 0000 1111 1010 = 0xF0, 0xFA
+	expected := []byte{0xF0, 0xFA}
+	if len(buf) != 2 {
+		t.Fatalf("GetBitBuffer(16) len = %d, want 2", len(buf))
+	}
+	if buf[0] != expected[0] || buf[1] != expected[1] {
+		t.Errorf("GetBitBuffer(16) = [0x%02X, 0x%02X], want [0x%02X, 0x%02X]",
+			buf[0], buf[1], expected[0], expected[1])
+	}
+}
+
+func TestReader_GetBitBuffer_Aligned(t *testing.T) {
+	data := []byte{0xFF, 0x0F, 0xAB, 0xCD}
+	r := NewReader(data)
+
+	// Read 2 bytes (16 bits) when aligned
+	buf := r.GetBitBuffer(16)
+	if len(buf) != 2 {
+		t.Fatalf("len = %d, want 2", len(buf))
+	}
+	if buf[0] != 0xFF || buf[1] != 0x0F {
+		t.Errorf("got [0x%02X, 0x%02X], want [0xFF, 0x0F]", buf[0], buf[1])
+	}
+}
+
+func TestReader_GetBitBuffer_WithRemainder(t *testing.T) {
+	data := []byte{0xF0, 0x00, 0x00, 0x00}
+	r := NewReader(data)
+
+	// Read 4 bits - should return 1 byte with high nibble = 0xF, low nibble = 0
+	buf := r.GetBitBuffer(4)
+	if len(buf) != 1 {
+		t.Fatalf("len = %d, want 1", len(buf))
+	}
+	// 4 bits 1111 shifted left by 4 = 11110000 = 0xF0
+	if buf[0] != 0xF0 {
+		t.Errorf("got 0x%02X, want 0xF0", buf[0])
+	}
+}
+
+func TestReader_GetBitBuffer_Zero(t *testing.T) {
+	data := []byte{0xFF, 0x00}
+	r := NewReader(data)
+
+	// Read 0 bits - should return empty slice
+	buf := r.GetBitBuffer(0)
+	if len(buf) != 0 {
+		t.Errorf("GetBitBuffer(0) len = %d, want 0", len(buf))
+	}
+
+	// Verify no bits were consumed
+	got := r.GetBits(8)
+	if got != 0xFF {
+		t.Errorf("After GetBitBuffer(0), GetBits(8) = 0x%X, want 0xFF", got)
+	}
+}

@@ -203,3 +203,26 @@ func (r *Reader) ByteAlign() uint8 {
 func (r *Reader) GetProcessedBits() uint32 {
 	return uint32((r.pos-4)*8) - r.bitsLeft
 }
+
+// GetBitBuffer reads 'bits' bits and returns them as a byte slice.
+// Partial final byte is left-aligned (MSB) with zero padding.
+//
+// Ported from: faad_getbitbuffer() in ~/dev/faad2/libfaad/bits.c:222-245
+func (r *Reader) GetBitBuffer(bits uint) []byte {
+	numBytes := (bits + 7) / 8
+	remainder := bits & 7
+
+	buffer := make([]byte, numBytes)
+
+	for i := uint(0); i < bits/8; i++ {
+		buffer[i] = byte(r.GetBits(8))
+	}
+
+	if remainder > 0 {
+		// Read remaining bits and left-align in the last byte
+		temp := r.GetBits(remainder) << (8 - remainder)
+		buffer[numBytes-1] = byte(temp)
+	}
+
+	return buffer
+}
