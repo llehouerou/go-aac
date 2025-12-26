@@ -191,3 +191,15 @@ func (r *Reader) ByteAlign() uint8 {
 	r.FlushBits(uint(skip))
 	return uint8(skip)
 }
+
+// GetProcessedBits returns the number of bits read from the stream.
+//
+// Ported from: faad_get_processed_bits() in ~/dev/faad2/libfaad/bits.c:106-109
+//
+// FAAD2 uses pointer arithmetic: 8 * (4*(tail - start) - 4) - bits_left
+// In Go, we use byte offset pos instead of pointer arithmetic.
+// After init: pos=8 (bytes 0-7 loaded into bufa/bufb), bitsLeft=32
+// Formula: (pos-4)*8 - bitsLeft = bits consumed from stream
+func (r *Reader) GetProcessedBits() uint32 {
+	return uint32((r.pos-4)*8) - r.bitsLeft
+}

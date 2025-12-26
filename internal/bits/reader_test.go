@@ -360,3 +360,42 @@ func TestReader_ByteAlign_AfterFullByte(t *testing.T) {
 		t.Errorf("ByteAlign() after 8 bits = %d, want 0", skipped)
 	}
 }
+
+func TestReader_GetProcessedBits(t *testing.T) {
+	data := []byte{0xFF, 0x0F, 0xAB, 0xCD, 0x12, 0x34, 0x56, 0x78}
+	r := NewReader(data)
+
+	// Initially at bit 0
+	if got := r.GetProcessedBits(); got != 0 {
+		t.Errorf("Initial position = %d, want 0", got)
+	}
+
+	// Read 12 bits
+	_ = r.GetBits(12)
+	if got := r.GetProcessedBits(); got != 12 {
+		t.Errorf("After 12 bits: position = %d, want 12", got)
+	}
+
+	// Read another 8 bits
+	_ = r.GetBits(8)
+	if got := r.GetProcessedBits(); got != 20 {
+		t.Errorf("After 20 bits: position = %d, want 20", got)
+	}
+}
+
+func TestReader_GetProcessedBits_CrossBuffer(t *testing.T) {
+	data := []byte{
+		0xFF, 0xFF, 0xFF, 0xFF, // 32 bits
+		0xAA, 0xBB, 0xCC, 0xDD, // 32 bits
+		0x11, 0x22, 0x33, 0x44, // 32 bits
+	}
+	r := NewReader(data)
+
+	// Read 40 bits (crosses buffer boundary)
+	_ = r.GetBits(32)
+	_ = r.GetBits(8)
+
+	if got := r.GetProcessedBits(); got != 40 {
+		t.Errorf("After 40 bits: position = %d, want 40", got)
+	}
+}
