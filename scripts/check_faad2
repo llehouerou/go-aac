@@ -1,0 +1,168 @@
+#!/bin/bash
+#
+# check_faad2 - Compare go-aac output against FAAD2 reference
+#
+# This script generates reference data from FAAD2 and compares it
+# against the Go decoder output.
+#
+# Usage:
+#   ./check_faad2 <aac_file> [go_output_dir]
+#
+# The script will:
+#   1. Generate reference data using faad2_debug
+#   2. Run the Go decoder (if go_output_dir provided)
+#   3. Compare outputs and report differences
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+FAAD2_DEBUG="$SCRIPT_DIR/faad2_debug"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+usage() {
+    echo "Usage: $0 <aac_file> [go_output_dir]"
+    echo ""
+    echo "Arguments:"
+    echo "  aac_file      - Input AAC file (ADTS format)"
+    echo "  go_output_dir - Directory with Go decoder output (optional)"
+    echo ""
+    echo "Examples:"
+    echo "  # Generate reference data only:"
+    echo "  $0 test.aac"
+    echo ""
+    echo "  # Compare Go output against FAAD2:"
+    echo "  $0 test.aac /tmp/go_output"
+    echo ""
+    echo "Output:"
+    echo "  Reference data is written to /tmp/faad2_ref_<basename>/"
+}
+
+# Check arguments
+if [ $# -lt 1 ]; then
+    usage
+    exit 1
+fi
+
+AAC_FILE="$1"
+GO_OUTPUT_DIR="${2:-}"
+
+if [ ! -f "$AAC_FILE" ]; then
+    echo -e "${RED}Error: File not found: $AAC_FILE${NC}"
+    exit 1
+fi
+
+# Build faad2_debug if needed
+if [ ! -x "$FAAD2_DEBUG" ]; then
+    echo "Building faad2_debug..."
+    make -C "$SCRIPT_DIR" faad2_debug
+fi
+
+# Create reference output directory
+BASENAME=$(basename "$AAC_FILE" .aac)
+REF_DIR="/tmp/faad2_ref_${BASENAME}"
+mkdir -p "$REF_DIR"
+
+echo "========================================"
+echo "FAAD2 Reference Data Generator"
+echo "========================================"
+echo "Input:  $AAC_FILE"
+echo "Output: $REF_DIR"
+echo ""
+
+# Run FAAD2 debug tool
+echo "Generating reference data with FAAD2..."
+"$FAAD2_DEBUG" "$AAC_FILE" "$REF_DIR"
+
+echo ""
+echo -e "${GREEN}Reference data generated successfully!${NC}"
+echo ""
+
+# Show info
+if [ -f "$REF_DIR/info.json" ]; then
+    echo "Stream info:"
+    cat "$REF_DIR/info.json"
+    echo ""
+fi
+
+# Count frames
+NUM_FRAMES=$(ls -1 "$REF_DIR"/frame_*_pcm.bin 2>/dev/null | wc -l)
+echo "Generated $NUM_FRAMES frame dumps"
+
+# If Go output directory provided, compare
+if [ -n "$GO_OUTPUT_DIR" ]; then
+    echo ""
+    echo "========================================"
+    echo "Comparing with Go decoder output"
+    echo "========================================"
+    echo "Go output: $GO_OUTPUT_DIR"
+    echo ""
+
+    if [ ! -d "$GO_OUTPUT_DIR" ]; then
+        echo -e "${RED}Error: Go output directory not found: $GO_OUTPUT_DIR${NC}"
+        exit 1
+    fi
+
+    # Compare PCM files
+    PASS=0
+    FAIL=0
+    MISSING=0
+
+    for ref_pcm in "$REF_DIR"/frame_*_pcm.bin; do
+        frame_name=$(basename "$ref_pcm")
+        go_pcm="$GO_OUTPUT_DIR/$frame_name"
+
+        if [ ! -f "$go_pcm" ]; then
+            echo -e "${YELLOW}MISSING: $frame_name${NC}"
+            ((MISSING++))
+            continue
+        fi
+
+        # Compare files (binary exact or with tolerance)
+        if cmp -s "$ref_pcm" "$go_pcm"; then
+            echo -e "${GREEN}PASS: $frame_name (exact match)${NC}"
+            ((PASS++))
+        else
+            # Check if sizes match
+            ref_size=$(stat -c%s "$ref_pcm")
+            go_size=$(stat -c%s "$go_pcm")
+
+            if [ "$ref_size" != "$go_size" ]; then
+                echo -e "${RED}FAIL: $frame_name (size mismatch: ref=$ref_size, go=$go_size)${NC}"
+            else
+                # Calculate difference (simple byte-by-byte comparison)
+                # For more sophisticated comparison, use a dedicated tool
+                diff_bytes=$(cmp -l "$ref_pcm" "$go_pcm" 2>/dev/null | wc -l)
+                total_bytes=$ref_size
+                diff_pct=$((diff_bytes * 100 / total_bytes))
+                echo -e "${RED}FAIL: $frame_name ($diff_bytes/$total_bytes bytes differ, ${diff_pct}%)${NC}"
+            fi
+            ((FAIL++))
+        fi
+    done
+
+    echo ""
+    echo "========================================"
+    echo "Summary"
+    echo "========================================"
+    echo -e "${GREEN}PASS:    $PASS${NC}"
+    echo -e "${RED}FAIL:    $FAIL${NC}"
+    echo -e "${YELLOW}MISSING: $MISSING${NC}"
+
+    if [ $FAIL -eq 0 ] && [ $MISSING -eq 0 ]; then
+        echo ""
+        echo -e "${GREEN}All tests passed!${NC}"
+        exit 0
+    else
+        exit 1
+    fi
+fi
+
+echo ""
+echo "To compare with Go decoder output:"
+echo "  $0 $AAC_FILE <go_output_dir>"

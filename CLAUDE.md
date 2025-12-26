@@ -98,12 +98,75 @@ The alicebob/alac library was ported from C and had several translation bugs:
 - When fixing bugs, first write a test that reproduces the bug
 - Run `make check` before committing any changes
 
-### Testing Against Reference Implementation
+### Testing Against FAAD2 Reference (MANDATORY)
 
-- Use FFmpeg to encode WAV files to AAC
-- Use FFmpeg to decode AAC to raw PCM (reference output)
-- Compare Go decoder output against FFmpeg reference
-- Test matrix: various sample rates, bit depths, channel configurations
+**Every implementation step MUST be validated against FAAD2 reference output.**
+
+We use a custom `faad2_debug` tool that decodes AAC files and dumps intermediate values at each pipeline stage. This allows precise comparison at every step, not just final PCM output.
+
+#### FAAD2 Debug Tool
+
+Located in `scripts/`:
+```bash
+# Build the debug tool
+cd scripts && make
+
+# Generate reference data for an AAC file
+./check_faad2 input.aac
+
+# Reference data is written to /tmp/faad2_ref_<name>/
+```
+
+Output files per frame:
+- `frame_NNNN_adts.bin` - Parsed ADTS header (16 bytes)
+- `frame_NNNN_pcm.bin` - Final PCM output (int16 interleaved)
+- `info.json` - Stream metadata (sample rate, channels, frame count)
+
+#### Testing Workflow
+
+1. **Generate test AAC files** with FFmpeg:
+   ```bash
+   ffmpeg -f lavfi -i "sine=frequency=1000:duration=1" -c:a aac -b:a 128k test.aac
+   ```
+
+2. **Generate FAAD2 reference data**:
+   ```bash
+   ./scripts/check_faad2 test.aac
+   ```
+
+3. **Write Go tests that compare against reference**:
+   ```go
+   func TestADTSParser(t *testing.T) {
+       // Load reference data
+       ref, _ := os.ReadFile("/tmp/faad2_ref_test/frame_0001_adts.bin")
+
+       // Parse with Go implementation
+       data, _ := os.ReadFile("testdata/test.aac")
+       header, _ := syntax.ParseADTS(bits.NewReader(data))
+
+       // Compare against FAAD2 reference
+       assert.Equal(t, ref[6], header.SFIndex)  // Sample rate index
+       assert.Equal(t, ref[8], header.ChannelConfig)
+   }
+   ```
+
+4. **Run comparison script** (when Go output is available):
+   ```bash
+   ./scripts/check_faad2 test.aac /tmp/go_output
+   ```
+
+#### Test Data Generation
+
+Use `testdata/generate.go` to create comprehensive test files:
+```bash
+go run testdata/generate.go
+```
+
+This generates AAC files with various:
+- Sample rates (8kHz - 96kHz)
+- Channel configurations (mono, stereo)
+- Profiles (AAC-LC, HE-AAC, HE-AACv2)
+- Audio types (silence, sine, sweep, noise, speech-like)
 
 ## Related Projects
 
@@ -144,10 +207,128 @@ find ~/dev/faad2/libfaad -name "*.c" | xargs wc -l | sort -n
 wc -l ~/dev/faad2/libfaad/{decoder,syntax,specrec,filtbank,mdct,huffman,bits,output}.c
 ```
 
-## File Naming Convention
+## Code Organization Rules (MANDATORY)
 
-Match FAAD2 structure for easy cross-reference:
-- `bits.go` <- `bits.c`
-- `huffman.go` <- `huffman.c`
-- `syntax.go` <- `syntax.c`
-- etc.
+**Do NOT replicate FAAD2's flat C structure. Use proper Go package organization.**
+
+### Package Structure
+
+```
+go-aac/
+├── aac.go                    # Public API only (Decoder, Config, Error types)
+├── decoder.go                # Main decoder implementation
+├── internal/
+│   ├── bits/                 # Bitstream reading
+│   │   ├── reader.go
+│   │   └── reader_test.go
+│   ├── huffman/              # Huffman decoding
+│   │   ├── decoder.go
+│   │   ├── codebook.go       # Codebook types and lookup logic
+│   │   ├── codebook_1.go     # HCB_1 table (one file per codebook)
+│   │   ├── codebook_2.go     # HCB_2 table
+│   │   ├── ...               # etc.
+│   │   ├── codebook_sf.go    # Scale factor codebook
+│   │   └── decoder_test.go
+│   ├── syntax/               # Bitstream syntax parsing
+│   │   ├── adts.go           # ADTS header parsing
+│   │   ├── adif.go           # ADIF header parsing
+│   │   ├── pce.go            # Program Config Element
+│   │   ├── ics.go            # Individual Channel Stream
+│   │   ├── sce.go            # Single Channel Element
+│   │   ├── cpe.go            # Channel Pair Element
+│   │   ├── fill.go           # Fill elements
+│   │   └── raw_data_block.go # Main parsing entry point
+│   ├── spectrum/             # Spectral processing
+│   │   ├── requant.go        # Inverse quantization
+│   │   ├── scalefac.go       # Scale factor application
+│   │   ├── ms.go             # M/S stereo
+│   │   ├── is.go             # Intensity stereo
+│   │   ├── pns.go            # Perceptual Noise Substitution
+│   │   ├── tns.go            # Temporal Noise Shaping
+│   │   └── reconstruct.go    # Main reconstruction
+│   ├── filterbank/           # Filter bank (IMDCT + windowing)
+│   │   ├── filterbank.go
+│   │   ├── window_sine.go    # Sine windows
+│   │   ├── window_kbd.go     # KBD windows
+│   │   └── filterbank_test.go
+│   ├── mdct/                 # MDCT implementation
+│   │   ├── mdct.go
+│   │   ├── tables.go
+│   │   └── mdct_test.go
+│   ├── fft/                  # FFT implementation
+│   │   ├── cfft.go
+│   │   ├── tables.go
+│   │   └── cfft_test.go
+│   ├── tables/               # Lookup tables
+│   │   ├── sample_rates.go
+│   │   ├── sfb_long.go       # SFB tables for long windows
+│   │   ├── sfb_short.go      # SFB tables for short windows
+│   │   └── iq_table.go       # Inverse quantization table
+│   ├── output/               # PCM output conversion
+│   │   ├── pcm.go
+│   │   ├── drc.go
+│   │   └── downmix.go
+│   ├── sbr/                  # HE-AAC (SBR) - optional
+│   │   ├── ...
+│   └── ps/                   # HE-AACv2 (PS) - optional
+│       ├── ...
+└── testdata/                 # Test files
+```
+
+### File Size Rules
+
+**Maximum ~300 lines per file.** Split larger logical units:
+
+| Instead of... | Split into... |
+|---------------|---------------|
+| `codebook.go` (3000 lines) | `codebook_1.go`, `codebook_2.go`, ... `codebook_sf.go` |
+| `tables.go` (5000 lines) | `tables_iq.go`, `tables_sfb.go`, `tables_window.go` |
+| `syntax.go` (2700 lines) | `adts.go`, `adif.go`, `ics.go`, `sce.go`, `cpe.go`, etc. |
+| `specrec.go` (1400 lines) | `requant.go`, `scalefac.go`, `reconstruct.go` |
+
+### Naming Conventions
+
+1. **Package names**: Short, lowercase, single word (e.g., `bits`, `huffman`, `syntax`)
+2. **File names**: Descriptive, snake_case for multi-word (e.g., `raw_data_block.go`)
+3. **Test files**: Same name with `_test.go` suffix, same package
+4. **Table files**: Prefix with what they contain (e.g., `codebook_1.go`, `window_sine.go`)
+
+### Cross-Reference Comments
+
+Since we're not matching FAAD2's flat structure, add source reference comments:
+
+```go
+// Package bits implements AAC bitstream reading.
+// Ported from: ~/dev/faad2/libfaad/bits.c
+package bits
+
+// Reader reads bits from a byte buffer.
+// Ported from: bitfile struct in bits.h:48-60
+type Reader struct {
+    // ...
+}
+
+// GetBits reads n bits from the stream.
+// Ported from: faad_getbits() in bits.h:130-146
+func (r *Reader) GetBits(n uint) uint32 {
+    // ...
+}
+```
+
+### Package Dependencies
+
+Enforce clean dependency graph (no cycles):
+
+```
+aac (public API)
+ └── internal/decoder
+      ├── internal/syntax
+      │    └── internal/bits
+      │    └── internal/huffman
+      ├── internal/spectrum
+      │    └── internal/tables
+      ├── internal/filterbank
+      │    └── internal/mdct
+      │         └── internal/fft
+      └── internal/output
+```

@@ -1,8 +1,8 @@
 # Generated test data (regenerate with: make testdata)
 testdata/generated/
 
-# Documentation (internal reference)
-docs/
+# Documentation build output (if any)
+# docs/ - now tracked for MIGRATION_STEPS.md
 
 # Test coverage
 coverage.out
