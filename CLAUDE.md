@@ -11,14 +11,16 @@ Port FAAD2 (Freeware Advanced Audio Decoder) from C to pure Go, creating a compl
 - AAC is the most common codec in M4A files (alongside ALAC)
 - Needed for a pure Go audio player project
 
-## Reference Implementation
+## Reference Implementation (MANDATORY)
 
-**FAAD2**: ~/dev/faad2 (cloned from https://github.com/knik0/faad2)
+**FAAD2**: `~/dev/faad2` (cloned from https://github.com/knik0/faad2)
 
 - License: GPL
 - Language: C
 - Well-structured, readable codebase
 - Supports: AAC-LC, Main, LTP, HE-AAC (SBR), HE-AACv2 (SBR+PS)
+
+**IMPORTANT: When in doubt about implementation details, ALWAYS consult the FAAD2 source code in `~/dev/faad2/libfaad/`. This is the authoritative reference for this project. Do not guess or invent behavior - read the C code and port it accurately.**
 
 ## AAC Specifications
 
