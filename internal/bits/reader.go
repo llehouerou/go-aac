@@ -158,3 +158,17 @@ func (r *Reader) GetBits(n uint) uint32 {
 	r.FlushBits(n)
 	return ret
 }
+
+// Get1Bit reads and returns a single bit from the stream.
+// Optimized path for single-bit reads.
+//
+// Ported from: faad_get1bit() in ~/dev/faad2/libfaad/bits.h:148-167
+func (r *Reader) Get1Bit() uint8 {
+	if r.bitsLeft > 0 {
+		r.bitsLeft--
+		return uint8((r.bufa >> r.bitsLeft) & 1)
+	}
+
+	// bitsLeft == 0, need to reload
+	return uint8(r.GetBits(1))
+}

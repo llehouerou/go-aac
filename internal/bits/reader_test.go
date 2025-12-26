@@ -287,3 +287,38 @@ func TestReader_GetBits_Zero(t *testing.T) {
 		t.Errorf("After GetBits(0), GetBits(8) = 0x%X, want 0xFF", got)
 	}
 }
+
+func TestReader_Get1Bit(t *testing.T) {
+	// 0xA5 = 10100101 binary
+	data := []byte{0xA5, 0x00, 0x00, 0x00}
+	r := NewReader(data)
+
+	expected := []uint8{1, 0, 1, 0, 0, 1, 0, 1}
+	for i, want := range expected {
+		got := r.Get1Bit()
+		if got != want {
+			t.Errorf("Get1Bit() #%d = %d, want %d", i, got, want)
+		}
+	}
+}
+
+func TestReader_Get1Bit_CrossBuffer(t *testing.T) {
+	// Read 31 bits, then read single bits across boundary
+	data := []byte{0xFF, 0xFF, 0xFF, 0xFE, 0x80, 0x00, 0x00, 0x00}
+	r := NewReader(data)
+
+	// Skip 31 bits
+	_ = r.GetBits(31)
+
+	// Next bit (bit 32) should be 0 (from 0xFE = 11111110)
+	got := r.Get1Bit()
+	if got != 0 {
+		t.Errorf("Get1Bit() at bit 32 = %d, want 0", got)
+	}
+
+	// Next bit (bit 33) should be 1 (from 0x80 = 10000000)
+	got = r.Get1Bit()
+	if got != 1 {
+		t.Errorf("Get1Bit() at bit 33 = %d, want 1", got)
+	}
+}
