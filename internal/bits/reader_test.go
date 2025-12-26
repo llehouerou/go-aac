@@ -465,3 +465,109 @@ func TestReader_GetBitBuffer_Zero(t *testing.T) {
 		t.Errorf("After GetBitBuffer(0), GetBits(8) = 0x%X, want 0xFF", got)
 	}
 }
+
+func TestReader_ResetBits(t *testing.T) {
+	data := []byte{0xFF, 0x0F, 0xAB, 0xCD, 0x12, 0x34, 0x56, 0x78}
+	r := NewReader(data)
+
+	// Read 24 bits
+	first24 := r.GetBits(24)
+	if first24 != 0xFF0FAB {
+		t.Fatalf("First read: got 0x%X, want 0xFF0FAB", first24)
+	}
+
+	// Reset to beginning
+	r.ResetBits(0)
+	if r.GetProcessedBits() != 0 {
+		t.Errorf("After reset(0): position = %d, want 0", r.GetProcessedBits())
+	}
+
+	// Should read same data again
+	again := r.GetBits(24)
+	if again != first24 {
+		t.Errorf("After reset: got 0x%X, want 0x%X", again, first24)
+	}
+}
+
+func TestReader_ResetBits_ToMiddle(t *testing.T) {
+	data := []byte{0xFF, 0x0F, 0xAB, 0xCD, 0x12, 0x34, 0x56, 0x78}
+	r := NewReader(data)
+
+	// Reset to bit 16
+	r.ResetBits(16)
+
+	// Should read from byte 2 (0xAB)
+	got := r.GetBits(16)
+	expected := uint32(0xABCD)
+	if got != expected {
+		t.Errorf("After reset(16): got 0x%X, want 0x%X", got, expected)
+	}
+}
+
+func TestReader_ResetBits_NonByteAligned(t *testing.T) {
+	data := []byte{0xFF, 0x0F, 0xAB, 0xCD, 0x12, 0x34, 0x56, 0x78}
+	r := NewReader(data)
+
+	// Reset to bit 12 (1.5 bytes)
+	r.ResetBits(12)
+
+	// First 12 bits are 0xFF0 = 111111110000
+	// At bit 12, next 8 bits: 11111010 = 0xFA
+	got := r.GetBits(8)
+	expected := uint32(0xFA)
+	if got != expected {
+		t.Errorf("After reset(12): got 0x%X, want 0x%X", got, expected)
+	}
+}
+
+func TestReader_ResetBits_CrossWord(t *testing.T) {
+	// Test resetting to a position beyond the first 32 bits
+	data := []byte{
+		0xFF, 0xFF, 0xFF, 0xFF, // First 32 bits (word 0)
+		0xAA, 0xBB, 0xCC, 0xDD, // Next 32 bits (word 1)
+		0x11, 0x22, 0x33, 0x44, // Next 32 bits (word 2)
+	}
+	r := NewReader(data)
+
+	// Reset to bit 40 (word 1, 8 bits in)
+	r.ResetBits(40)
+
+	// Position should be 40
+	if got := r.GetProcessedBits(); got != 40 {
+		t.Errorf("Position after reset(40) = %d, want 40", got)
+	}
+
+	// Next 24 bits should be 0xBBCCDD
+	got := r.GetBits(24)
+	expected := uint32(0xBBCCDD)
+	if got != expected {
+		t.Errorf("After reset(40), GetBits(24) = 0x%X, want 0x%X", got, expected)
+	}
+}
+
+func TestReader_ResetBits_ClearsError(t *testing.T) {
+	data := []byte{0xFF, 0x0F, 0xAB, 0xCD}
+	r := NewReader(data)
+
+	// Manually set error flag
+	r.err = true
+
+	// Reset should clear error
+	r.ResetBits(0)
+
+	if r.Error() {
+		t.Error("ResetBits should clear error flag")
+	}
+}
+
+func TestReader_ResetBits_BeyondBuffer(t *testing.T) {
+	data := []byte{0xFF, 0x0F}
+	r := NewReader(data)
+
+	// Try to reset beyond buffer (32 bits = 4 bytes, but we only have 2)
+	r.ResetBits(64) // 64 bits = 8 bytes
+
+	if !r.Error() {
+		t.Error("ResetBits beyond buffer should set error flag")
+	}
+}

@@ -226,3 +226,28 @@ func (r *Reader) GetBitBuffer(bits uint) []byte {
 
 	return buffer
 }
+
+// ResetBits seeks to a specific bit position in the stream.
+// Used for error recovery, re-parsing after detecting SBR extension data, etc.
+//
+// Ported from: faad_resetbits() in ~/dev/faad2/libfaad/bits.c:180-220
+func (r *Reader) ResetBits(bits uint32) {
+	words := bits >> 5       // bits / 32
+	remainder := bits & 0x1F // bits % 32
+
+	byteOffset := int(words * 4)
+	if byteOffset > r.bufferSize {
+		r.err = true
+		return
+	}
+
+	// Load bufa from word at wordIndex
+	r.bufa = r.loadWord(byteOffset)
+	// Load bufb from next word
+	r.bufb = r.loadWord(byteOffset + 4)
+	// Set position for next load (after bufa and bufb)
+	r.pos = byteOffset + 8
+
+	r.bitsLeft = 32 - remainder
+	r.err = false
+}
