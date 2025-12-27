@@ -152,3 +152,56 @@ func TestFindSyncword_NotFound(t *testing.T) {
 		t.Fatal("expected error for missing syncword")
 	}
 }
+
+func TestParseFixedHeader(t *testing.T) {
+	// Manually construct ADTS fixed header (16 bits after syncword):
+	// syncword=0xFFF (12 bits) - already consumed by FindSyncword
+	// id=0 (1 bit) - MPEG-4
+	// layer=00 (2 bits)
+	// protection_absent=1 (1 bit) - no CRC
+	// profile=01 (2 bits) - LC
+	// sf_index=0011 (4 bits) - 48000 Hz
+	// private_bit=0 (1 bit)
+	// channel_config=010 (3 bits) - stereo
+	// original=0 (1 bit)
+	// home=0 (1 bit)
+	//
+	// Bytes: FF F1 4C 80
+	// Binary: 11111111 11110001 01001100 10000000
+	// Syncword: 111111111111 (0xFFF)
+	// After syncword: 0001 01001100 10000000
+	//   ID=0, Layer=00, ProtAbsent=1, Profile=01, SFIndex=0011,
+	//   PrivateBit=0, ChannelConfig=010, Original=0, Home=0
+
+	data := []byte{0xFF, 0xF1, 0x4C, 0x80, 0x00, 0x1F, 0xFC}
+	r := bits.NewReader(data)
+
+	// Skip syncword (would be done by FindSyncword)
+	r.FlushBits(12)
+
+	h := &ADTSHeader{Syncword: ADTSSyncword}
+	err := parseFixedHeader(r, h)
+	if err != nil {
+		t.Fatalf("parseFixedHeader failed: %v", err)
+	}
+
+	// Verify parsed values
+	if h.ID != 0 {
+		t.Errorf("ID = %d, want 0 (MPEG-4)", h.ID)
+	}
+	if h.Layer != 0 {
+		t.Errorf("Layer = %d, want 0", h.Layer)
+	}
+	if !h.ProtectionAbsent {
+		t.Error("ProtectionAbsent = false, want true")
+	}
+	if h.Profile != 1 {
+		t.Errorf("Profile = %d, want 1 (LC)", h.Profile)
+	}
+	if h.SFIndex != 3 {
+		t.Errorf("SFIndex = %d, want 3 (48000Hz)", h.SFIndex)
+	}
+	if h.ChannelConfiguration != 2 {
+		t.Errorf("ChannelConfiguration = %d, want 2 (stereo)", h.ChannelConfiguration)
+	}
+}

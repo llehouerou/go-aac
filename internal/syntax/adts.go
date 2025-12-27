@@ -98,3 +98,27 @@ func (h *ADTSHeader) HeaderSize() int {
 func (h *ADTSHeader) DataSize() int {
 	return int(h.AACFrameLength) - h.HeaderSize()
 }
+
+// parseFixedHeader parses the ADTS fixed header (16 bits after syncword).
+// The syncword must already be consumed before calling this function.
+//
+// Ported from: adts_fixed_header() in ~/dev/faad2/libfaad/syntax.c:2484-2511
+func parseFixedHeader(r *bits.Reader, h *ADTSHeader) error {
+	h.ID = r.Get1Bit()
+	h.Layer = uint8(r.GetBits(2))
+	h.ProtectionAbsent = r.Get1Bit() == 1
+	h.Profile = uint8(r.GetBits(2))
+	h.SFIndex = uint8(r.GetBits(4))
+	h.PrivateBit = r.Get1Bit() == 1
+	h.ChannelConfiguration = uint8(r.GetBits(3))
+	h.Original = r.Get1Bit() == 1
+	h.Home = r.Get1Bit() == 1
+
+	// Old ADTS format (removed in corrigendum 14496-3:2002)
+	// Only for MPEG-4 (id=0) with old_format flag
+	if h.OldFormat && h.ID == 0 {
+		h.Emphasis = uint8(r.GetBits(2))
+	}
+
+	return nil
+}
