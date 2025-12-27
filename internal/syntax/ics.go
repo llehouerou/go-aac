@@ -48,4 +48,8 @@ type ICStream struct {
 	// Embedded tool data
 	Pul PulseInfo // Pulse data (if present)
 	TNS TNSInfo   // TNS data (if present)
+
+	// Optional profile data
+	LTP  LTPInfo // LTP data (LTP profile, first predictor)
+	LTP2 LTPInfo // LTP data (LTP profile, second predictor for CPE)
 }

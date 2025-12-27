@@ -100,3 +100,11 @@ func TestICStream_Flags(t *testing.T) {
 	ics.GainControlDataPresent = false
 	ics.PredictorDataPresent = false
 }
+
+func TestICStream_LTPFields(t *testing.T) {
+	var ics ICStream
+
+	// LTP info (for LTP profile)
+	_ = ics.LTP.DataPresent
+	_ = ics.LTP2.DataPresent
+}
