@@ -93,3 +93,39 @@ func getEscape(r *bits.Reader, sp *int16) error {
 	*sp = j
 	return nil
 }
+
+// decode2StepQuad decodes a quadruple (4 values) using 2-step table lookup.
+// Used for codebooks 1, 2, and 4.
+//
+// Step 1: Read root_bits (5) and lookup in first table
+// Step 2: If extra_bits > 0, read more bits and lookup in second table
+//
+// Ported from: huffman_2step_quad() in ~/dev/faad2/libfaad/huffman.c:150-188
+func decode2StepQuad(cb uint8, r *bits.Reader, sp []int16) error {
+	root := HCBTable[cb]
+	rootBits := HCBN[cb]
+	table := HCB2QuadTable[cb]
+
+	// Read first-step bits and lookup
+	cw := r.ShowBits(uint(rootBits))
+	offset := uint16((*root)[cw].Offset)
+	extraBits := (*root)[cw].ExtraBits
+
+	if extraBits != 0 {
+		// Need more bits - flush root bits, read extra, adjust offset
+		r.FlushBits(uint(rootBits))
+		offset += uint16(r.ShowBits(uint(extraBits)))
+		r.FlushBits(uint((*table)[offset].Bits) - uint(rootBits))
+	} else {
+		// All bits in root lookup
+		r.FlushBits(uint((*table)[offset].Bits))
+	}
+
+	// Extract the four values
+	sp[0] = int16((*table)[offset].X)
+	sp[1] = int16((*table)[offset].Y)
+	sp[2] = int16((*table)[offset].V)
+	sp[3] = int16((*table)[offset].W)
+
+	return nil
+}

@@ -2,6 +2,7 @@
 package huffman
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/llehouerou/go-aac/internal/bits"
@@ -184,6 +185,70 @@ func buildSignBitstream(signBits []uint8) []byte {
 		}
 	}
 	return data
+}
+
+func TestDecode2StepQuad(t *testing.T) {
+	// Test with a known codeword from codebook 1
+	// The first entry in hcb1_2 (index 0) has bits=1, x=0, y=0, v=0, w=0
+	// which corresponds to codeword "0" (1 bit)
+	// From hcb1_1[0]: offset=0, extra_bits=0
+
+	// So bit pattern 00000xxx (first 5 bits = 0) should give (0,0,0,0)
+	data := []byte{0x00, 0x00}
+	r := bits.NewReader(data)
+
+	var sp [4]int16
+	err := decode2StepQuad(1, r, sp[:])
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	expected := [4]int16{0, 0, 0, 0}
+	if sp != expected {
+		t.Errorf("got %v, want %v", sp, expected)
+	}
+}
+
+func TestDecode2StepQuad_AllCodebooks(t *testing.T) {
+	// Test that valid codebook indices work without panic
+	for _, cb := range []uint8{1, 2, 4} {
+		t.Run(fmt.Sprintf("codebook_%d", cb), func(t *testing.T) {
+			// Use a pattern of zeros which should decode to smallest values
+			data := []byte{0x00, 0x00, 0x00, 0x00}
+			r := bits.NewReader(data)
+
+			var sp [4]int16
+			err := decode2StepQuad(cb, r, sp[:])
+
+			if err != nil {
+				t.Errorf("codebook %d: unexpected error: %v", cb, err)
+			}
+		})
+	}
+}
+
+func TestDecode2StepQuad_LongerCodeword(t *testing.T) {
+	// Test a codeword that requires extra bits (7-bit codeword)
+	// For codebook 1:
+	// First 5 bits = 11000 (binary = 24) -> hcb1_1[24] = {offset: 9, extra_bits: 2}
+	// Next 2 bits = 00 -> final offset = 9 + 0 = 9
+	// hcb1_2[9] = {7, 1, -1, 0, 0} -> 7 bit codeword, values (1, -1, 0, 0)
+
+	// Bits: 1100000x xxxxxxxx
+	// 11000 = first 5 bits, 00 = extra bits for offset
+	data := []byte{0xC0, 0x00} // 0b11000000 0b00000000
+	r := bits.NewReader(data)
+
+	var sp [4]int16
+	err := decode2StepQuad(1, r, sp[:])
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	expected := [4]int16{1, -1, 0, 0}
+	if sp != expected {
+		t.Errorf("got %v, want %v", sp, expected)
+	}
 }
 
 func TestGetEscape(t *testing.T) {
