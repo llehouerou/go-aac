@@ -41,7 +41,7 @@ func TestParseADTS_FAAD2Reference(t *testing.T) {
 
 	// Parse frames and compare
 	offset := 0
-	for frame := 0; frame < 5; frame++ {
+	for frame := range 5 {
 		refPath := filepath.Join(refDir, fmt.Sprintf("frame_%04d_adts.bin", frame))
 
 		refData, err := os.ReadFile(refPath)

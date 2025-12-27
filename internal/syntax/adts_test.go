@@ -9,30 +9,49 @@ import (
 )
 
 func TestADTSHeader_Fields(t *testing.T) {
-	var h ADTSHeader
+	// Test that ADTSHeader struct can be instantiated with all expected fields
+	// and that basic field assignments work correctly
+	h := ADTSHeader{
+		// Fixed header (28 bits)
+		Syncword:             0x0FFF,
+		ID:                   0, // MPEG-4
+		Layer:                0,
+		ProtectionAbsent:     true,
+		Profile:              1, // AAC LC
+		SFIndex:              4, // 44100 Hz
+		PrivateBit:           false,
+		ChannelConfiguration: 2, // Stereo
 
-	// Fixed header (28 bits)
-	h.Syncword = 0x0FFF
-	h.ID = 0 // MPEG-4
-	h.Layer = 0
-	h.ProtectionAbsent = true
-	h.Profile = 1 // AAC LC
-	h.SFIndex = 4 // 44100 Hz
-	h.PrivateBit = false
-	h.ChannelConfiguration = 2 // Stereo
+		// Variable header
+		Original:               false,
+		Home:                   false,
+		CopyrightIDBit:         false,
+		CopyrightIDStart:       false,
+		AACFrameLength:         512,
+		ADTSBufferFullness:     0x7FF,
+		CRCCheck:               0,
+		NoRawDataBlocksInFrame: 0,
 
-	// Variable header
-	h.Original = false
-	h.Home = false
-	h.CopyrightIDBit = false
-	h.CopyrightIDStart = false
-	h.AACFrameLength = 0
-	h.ADTSBufferFullness = 0
-	h.CRCCheck = 0
-	h.NoRawDataBlocksInFrame = 0
+		// Control
+		OldFormat: false,
+	}
 
-	// Control
-	h.OldFormat = false
+	// Verify key fields are set correctly
+	if h.Syncword != 0x0FFF {
+		t.Errorf("Syncword = 0x%X, want 0x0FFF", h.Syncword)
+	}
+	if h.Profile != 1 {
+		t.Errorf("Profile = %d, want 1", h.Profile)
+	}
+	if h.SFIndex != 4 {
+		t.Errorf("SFIndex = %d, want 4", h.SFIndex)
+	}
+	if h.ChannelConfiguration != 2 {
+		t.Errorf("ChannelConfiguration = %d, want 2", h.ChannelConfiguration)
+	}
+	if h.AACFrameLength != 512 {
+		t.Errorf("AACFrameLength = %d, want 512", h.AACFrameLength)
+	}
 }
 
 func TestADTSHeader_Syncword(t *testing.T) {
