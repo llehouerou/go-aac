@@ -480,3 +480,48 @@ func TestDecodeBinaryPair(t *testing.T) {
 		})
 	}
 }
+
+func TestVcb11CheckLAV(t *testing.T) {
+	tests := []struct {
+		name     string
+		cb       uint8
+		input    [2]int16
+		expected [2]int16
+	}{
+		{
+			name:     "codebook 16 LAV=16, within limit",
+			cb:       16,
+			input:    [2]int16{15, -10},
+			expected: [2]int16{15, -10},
+		},
+		{
+			name:     "codebook 16 LAV=16, exceeds limit",
+			cb:       16,
+			input:    [2]int16{17, 5},
+			expected: [2]int16{0, 0},
+		},
+		{
+			name:     "codebook 31 LAV=2047, within limit",
+			cb:       31,
+			input:    [2]int16{2000, -1000},
+			expected: [2]int16{2000, -1000},
+		},
+		{
+			name:     "non-VCB11 codebook, no change",
+			cb:       11,
+			input:    [2]int16{1000, 2000},
+			expected: [2]int16{1000, 2000},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sp := tc.input
+			vcb11CheckLAV(tc.cb, sp[:])
+
+			if sp != tc.expected {
+				t.Errorf("got %v, want %v", sp, tc.expected)
+			}
+		})
+	}
+}

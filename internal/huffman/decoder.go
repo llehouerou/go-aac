@@ -210,3 +210,39 @@ func decodeBinaryPair(cb uint8, r *bits.Reader, sp []int16) error {
 
 	return nil
 }
+
+// vcb11LAV is the Largest Absolute Value table for virtual codebook 11.
+// Index is (cb - 16), valid for codebooks 16-31.
+//
+// Ported from: vcb11_LAV_tab in ~/dev/faad2/libfaad/huffman.c:319-322
+var vcb11LAV = [16]int16{
+	16, 31, 47, 63, 95, 127, 159, 191,
+	223, 255, 319, 383, 511, 767, 1023, 2047,
+}
+
+// vcb11CheckLAV checks if values exceed the Largest Absolute Value
+// for virtual codebook 11 (codebooks 16-31). If exceeded, zeros them.
+//
+// This catches errors in escape sequences for VCB11.
+//
+// Ported from: vcb11_check_LAV() in ~/dev/faad2/libfaad/huffman.c:317-335
+func vcb11CheckLAV(cb uint8, sp []int16) {
+	if cb < 16 || cb > 31 {
+		return
+	}
+
+	maxVal := vcb11LAV[cb-16]
+
+	if abs16(sp[0]) > maxVal || abs16(sp[1]) > maxVal {
+		sp[0] = 0
+		sp[1] = 0
+	}
+}
+
+// abs16 returns the absolute value of an int16.
+func abs16(x int16) int16 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
