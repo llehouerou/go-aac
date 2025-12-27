@@ -10,7 +10,7 @@ type Codebook uint8
 const (
 	ZeroHCB       Codebook = 0  // No spectral data
 	FirstPairHCB  Codebook = 5  // First pair codebook
-	EscHCB        Codebook = 11 // Escape codebook
+	EscHCB        Codebook = 11 // Escape codebook (also last spectral codebook)
 	NoiseHCB      Codebook = 13 // Perceptual Noise Substitution
 	IntensityHCB2 Codebook = 14 // Intensity stereo (out of phase)
 	IntensityHCB  Codebook = 15 // Intensity stereo (in phase)
