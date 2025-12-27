@@ -1,6 +1,10 @@
 package tables
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/llehouerou/go-aac"
+)
 
 func TestGetSampleRate(t *testing.T) {
 	// Source: ~/dev/faad2/libfaad/common.c:59-71
@@ -95,5 +99,87 @@ func TestSampleRatesArray(t *testing.T) {
 
 	if SampleRates != expected {
 		t.Errorf("SampleRates = %v, want %v", SampleRates, expected)
+	}
+}
+
+func TestMaxPredSFB(t *testing.T) {
+	// Source: ~/dev/faad2/libfaad/common.c:73-85
+	expected := [12]uint8{33, 33, 38, 40, 40, 40, 41, 41, 37, 37, 37, 34}
+
+	for i := uint8(0); i < 12; i++ {
+		got := MaxPredSFB(i)
+		if got != expected[i] {
+			t.Errorf("MaxPredSFB(%d) = %d, want %d", i, got, expected[i])
+		}
+	}
+
+	// Test invalid index
+	if got := MaxPredSFB(12); got != 0 {
+		t.Errorf("MaxPredSFB(12) = %d, want 0", got)
+	}
+}
+
+func TestMaxTNSSFB(t *testing.T) {
+	// Source: ~/dev/faad2/libfaad/common.c:87-121
+	// Table columns: [Main/LC long, Main/LC short, SSR long, SSR short]
+	tests := []struct {
+		srIndex    uint8
+		objectType aac.ObjectType
+		isShort    bool
+		expected   uint8
+	}{
+		// 96000 Hz
+		{0, aac.ObjectTypeLC, false, 31},
+		{0, aac.ObjectTypeLC, true, 9},
+		{0, aac.ObjectTypeSSR, false, 28},
+		{0, aac.ObjectTypeSSR, true, 7},
+		// 48000 Hz
+		{3, aac.ObjectTypeLC, false, 40},
+		{3, aac.ObjectTypeLC, true, 14},
+		{3, aac.ObjectTypeSSR, false, 26},
+		{3, aac.ObjectTypeSSR, true, 6},
+		// 44100 Hz
+		{4, aac.ObjectTypeLC, false, 42},
+		{4, aac.ObjectTypeLC, true, 14},
+		// 8000 Hz
+		{11, aac.ObjectTypeLC, false, 39},
+		{11, aac.ObjectTypeLC, true, 14},
+		// Invalid index returns 0
+		{16, aac.ObjectTypeLC, false, 0},
+	}
+
+	for _, tt := range tests {
+		got := MaxTNSSFB(tt.srIndex, tt.objectType, tt.isShort)
+		if got != tt.expected {
+			t.Errorf("MaxTNSSFB(%d, %d, %v) = %d, want %d",
+				tt.srIndex, tt.objectType, tt.isShort, got, tt.expected)
+		}
+	}
+}
+
+func TestCanDecodeOT(t *testing.T) {
+	// Source: ~/dev/faad2/libfaad/common.c:124-172
+	// Note: We support LC, MAIN, LTP. SSR is not supported.
+	tests := []struct {
+		objectType aac.ObjectType
+		canDecode  bool
+	}{
+		{aac.ObjectTypeLC, true},
+		{aac.ObjectTypeMain, true},
+		{aac.ObjectTypeLTP, true},
+		{aac.ObjectTypeSSR, false},   // Not supported
+		{aac.ObjectTypeHEAAC, false}, // SBR handled separately
+		{aac.ObjectTypeERLC, true},
+		{aac.ObjectTypeERLTP, true},
+		{aac.ObjectTypeLD, true},
+		{aac.ObjectTypeDRMERLC, true},
+		{100, false}, // Unknown type
+	}
+
+	for _, tt := range tests {
+		got := CanDecodeOT(tt.objectType)
+		if got != tt.canDecode {
+			t.Errorf("CanDecodeOT(%d) = %v, want %v", tt.objectType, got, tt.canDecode)
+		}
 	}
 }
