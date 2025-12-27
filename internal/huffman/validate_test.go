@@ -407,7 +407,7 @@ func checkHCB2Quad(t *testing.T, name string, got, want HCB2Quad) {
 	if got != want {
 		t.Errorf("%s: got {%d, %d, %d, %d, %d}, want {%d, %d, %d, %d, %d}",
 			name, got.Bits, got.X, got.Y, got.V, got.W,
-			want.Bits, want.X, want.Y, want.W, want.W)
+			want.Bits, want.X, want.Y, want.V, want.W)
 	}
 }
 
