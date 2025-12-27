@@ -151,7 +151,24 @@ func parseErrorCheck(r *bits.Reader, h *ADTSHeader) {
 //
 // Ported from: adts_frame() in ~/dev/faad2/libfaad/syntax.c:2449-2458
 func ParseADTS(r *bits.Reader) (*ADTSHeader, error) {
-	h := &ADTSHeader{}
+	return ParseADTSWithOptions(r, ADTSOptions{})
+}
+
+// ADTSOptions contains optional settings for ADTS parsing.
+type ADTSOptions struct {
+	// OldFormat enables old ADTS format parsing (emphasis field for MPEG-4).
+	// This was removed in corrigendum 14496-3:2002.
+	OldFormat bool
+}
+
+// ParseADTSWithOptions parses an ADTS header with additional options.
+// Use this when you need to enable old format parsing or other options.
+//
+// Ported from: adts_frame() with old_format flag in ~/dev/faad2/libfaad/syntax.c
+func ParseADTSWithOptions(r *bits.Reader, opts ADTSOptions) (*ADTSHeader, error) {
+	h := &ADTSHeader{
+		OldFormat: opts.OldFormat,
+	}
 
 	// Find and consume syncword
 	if err := FindSyncword(r); err != nil {

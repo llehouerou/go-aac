@@ -360,3 +360,35 @@ func TestParseADTS_MultipleFrames(t *testing.T) {
 		t.Error("No frames parsed")
 	}
 }
+
+func TestParseADTSWithOptions_OldFormat(t *testing.T) {
+	// Test that OldFormat flag is respected and preserved
+	data := []byte{0xFF, 0xF1, 0x4C, 0x80, 0x00, 0x1F, 0xFC, 0x00}
+	r := bits.NewReader(data)
+
+	opts := ADTSOptions{OldFormat: true}
+	h, err := ParseADTSWithOptions(r, opts)
+	if err != nil {
+		t.Fatalf("ParseADTSWithOptions failed: %v", err)
+	}
+
+	if !h.OldFormat {
+		t.Error("OldFormat flag not preserved")
+	}
+}
+
+func TestParseADTSWithOptions_DefaultOptions(t *testing.T) {
+	// Test that default options work correctly
+	data := []byte{0xFF, 0xF1, 0x4C, 0x80, 0x00, 0x1F, 0xFC, 0x00}
+	r := bits.NewReader(data)
+
+	opts := ADTSOptions{}
+	h, err := ParseADTSWithOptions(r, opts)
+	if err != nil {
+		t.Fatalf("ParseADTSWithOptions failed: %v", err)
+	}
+
+	if h.OldFormat {
+		t.Error("OldFormat should be false by default")
+	}
+}
