@@ -96,3 +96,40 @@ func TestIQTable_Formula(t *testing.T) {
 		}
 	}
 }
+
+func TestIQuant(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    int16
+		expected float64
+		hasError bool
+	}{
+		{"zero", 0, 0, false},
+		{"positive_1", 1, 1, false},
+		{"positive_8", 8, 15.999999999999998, false},
+		{"negative_1", -1, -1, false},
+		{"negative_8", -8, -15.999999999999998, false},
+		{"positive_max", 8191, 165113.4940829452, false},
+		{"negative_max", -8191, -165113.4940829452, false},
+		{"overflow_positive", 8192, 0, true},
+		{"overflow_negative", -8192, 0, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := IQuant(tc.input)
+			if tc.hasError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if !floatEquals(got, tc.expected, 1e-10) {
+					t.Errorf("got %v, want %v", got, tc.expected)
+				}
+			}
+		})
+	}
+}
