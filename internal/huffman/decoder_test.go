@@ -525,3 +525,72 @@ func TestVcb11CheckLAV(t *testing.T) {
 		})
 	}
 }
+
+func TestSpectralData(t *testing.T) {
+	tests := []struct {
+		name string
+		cb   uint8
+	}{
+		{"codebook_1_quad_signed", 1},
+		{"codebook_2_quad_signed", 2},
+		{"codebook_3_binary_quad_unsigned", 3},
+		{"codebook_4_quad_unsigned", 4},
+		{"codebook_5_binary_pair_signed", 5},
+		{"codebook_6_pair_signed", 6},
+		{"codebook_7_binary_pair_unsigned", 7},
+		{"codebook_8_pair_unsigned", 8},
+		{"codebook_9_binary_pair_unsigned", 9},
+		{"codebook_10_pair_unsigned", 10},
+		{"codebook_11_escape", 11},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create bitstream with enough data
+			data := make([]byte, 16)
+			r := bits.NewReader(data)
+
+			var sp [4]int16
+			err := SpectralData(tc.cb, r, sp[:])
+
+			if err != nil {
+				t.Errorf("codebook %d: unexpected error: %v", tc.cb, err)
+			}
+		})
+	}
+}
+
+func TestSpectralData_InvalidCodebook(t *testing.T) {
+	data := []byte{0x00, 0x00, 0x00, 0x00}
+	r := bits.NewReader(data)
+
+	var sp [4]int16
+	err := SpectralData(0, r, sp[:])
+
+	if err == nil {
+		t.Error("expected error for codebook 0")
+	}
+
+	err = SpectralData(12, r, sp[:])
+	if err == nil {
+		t.Error("expected error for codebook 12")
+	}
+}
+
+func TestSpectralData_VCB11(t *testing.T) {
+	// Test virtual codebooks 16-31 (VCB11)
+	for cb := uint8(16); cb <= 31; cb++ {
+		t.Run(fmt.Sprintf("codebook_%d", cb), func(t *testing.T) {
+			// Create bitstream with enough data
+			data := make([]byte, 16)
+			r := bits.NewReader(data)
+
+			var sp [4]int16
+			err := SpectralData(cb, r, sp[:])
+
+			if err != nil {
+				t.Errorf("codebook %d: unexpected error: %v", cb, err)
+			}
+		})
+	}
+}

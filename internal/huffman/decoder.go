@@ -246,3 +246,84 @@ func abs16(x int16) int16 {
 	}
 	return x
 }
+
+// ErrInvalidCodebook indicates an invalid Huffman codebook index.
+var ErrInvalidCodebook = errors.New("huffman: invalid codebook")
+
+// SpectralData decodes spectral coefficients using the specified codebook.
+// For quad codebooks (1-4), sp must have at least 4 elements.
+// For pair codebooks (5-11), sp must have at least 2 elements.
+//
+// Returns the decoded values in sp. For unsigned codebooks, sign bits
+// are read separately. For escape codebook (11), escape sequences
+// are decoded for values of +/-16.
+//
+// Ported from: huffman_spectral_data() in ~/dev/faad2/libfaad/huffman.c:337-398
+func SpectralData(cb uint8, r *bits.Reader, sp []int16) error {
+	switch cb {
+	case 1, 2: // 2-step quad, signed
+		return decode2StepQuad(cb, r, sp)
+
+	case 3: // Binary quad, unsigned
+		if err := decodeBinaryQuad(r, sp); err != nil {
+			return err
+		}
+		signBits(r, sp[:QuadLen])
+		return nil
+
+	case 4: // 2-step quad, unsigned
+		if err := decode2StepQuad(cb, r, sp); err != nil {
+			return err
+		}
+		signBits(r, sp[:QuadLen])
+		return nil
+
+	case 5: // Binary pair, signed
+		return decodeBinaryPair(cb, r, sp)
+
+	case 6: // 2-step pair, signed
+		return decode2StepPair(cb, r, sp)
+
+	case 7, 9: // Binary pair, unsigned
+		if err := decodeBinaryPair(cb, r, sp); err != nil {
+			return err
+		}
+		signBits(r, sp[:PairLen])
+		return nil
+
+	case 8, 10: // 2-step pair, unsigned
+		if err := decode2StepPair(cb, r, sp); err != nil {
+			return err
+		}
+		signBits(r, sp[:PairLen])
+		return nil
+
+	case 11: // Escape codebook
+		if err := decode2StepPair(11, r, sp); err != nil {
+			return err
+		}
+		signBits(r, sp[:PairLen])
+		if err := getEscape(r, &sp[0]); err != nil {
+			return err
+		}
+		return getEscape(r, &sp[1])
+
+	case 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31:
+		// VCB11: virtual codebooks using codebook 11
+		if err := decode2StepPair(11, r, sp); err != nil {
+			return err
+		}
+		signBits(r, sp[:PairLen])
+		if err := getEscape(r, &sp[0]); err != nil {
+			return err
+		}
+		if err := getEscape(r, &sp[1]); err != nil {
+			return err
+		}
+		vcb11CheckLAV(cb, sp)
+		return nil
+
+	default:
+		return ErrInvalidCodebook
+	}
+}
