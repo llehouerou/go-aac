@@ -17,9 +17,9 @@ func TestADIFHeader_Fields(t *testing.T) {
 func TestADIFHeader_CopyrightID(t *testing.T) {
 	var h ADIFHeader
 
-	// Copyright ID is 9 bytes (72 bits)
-	if len(h.CopyrightID) != 9 {
-		t.Errorf("CopyrightID should have 9 bytes, got %d", len(h.CopyrightID))
+	// Copyright ID is 10 bytes (per FAAD2 structs.h:173)
+	if len(h.CopyrightID) != 10 {
+		t.Errorf("CopyrightID should have 10 bytes, got %d", len(h.CopyrightID))
 	}
 }
 

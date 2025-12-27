@@ -11,7 +11,7 @@ var ADIFMagic = [4]byte{'A', 'D', 'I', 'F'}
 // Ported from: adif_header in ~/dev/faad2/libfaad/structs.h:170-183
 type ADIFHeader struct {
 	CopyrightIDPresent       bool              // Copyright ID field present
-	CopyrightID              [9]int8           // 72-bit copyright ID (9 bytes)
+	CopyrightID              [10]int8          // Copyright ID (10 bytes, per FAAD2 structs.h:173)
 	OriginalCopy             bool              // Original/copy flag
 	Home                     bool              // Home flag
 	BitstreamType            uint8             // 0=constant rate, 1=variable rate
