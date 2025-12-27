@@ -2,6 +2,7 @@
 package syntax
 
 import (
+	"os"
 	"testing"
 
 	"github.com/llehouerou/go-aac/internal/bits"
@@ -275,5 +276,87 @@ func TestParseErrorCheck_NoCRC(t *testing.T) {
 	consumed := r.GetProcessedBits()
 	if consumed != 0 {
 		t.Errorf("consumed %d bits, want 0 (no CRC)", consumed)
+	}
+}
+
+func TestParseADTS_RealFile(t *testing.T) {
+	data, err := os.ReadFile("../../testdata/sine1k.aac")
+	if err != nil {
+		t.Skipf("Test file not available: %v", err)
+	}
+
+	r := bits.NewReader(data)
+	h, err := ParseADTS(r)
+	if err != nil {
+		t.Fatalf("ParseADTS failed: %v", err)
+	}
+
+	// Validate syncword was found
+	if h.Syncword != ADTSSyncword {
+		t.Errorf("Syncword = 0x%X, want 0x%X", h.Syncword, ADTSSyncword)
+	}
+
+	// Layer must be 0
+	if h.Layer != 0 {
+		t.Errorf("Layer = %d, want 0", h.Layer)
+	}
+
+	// Profile should be reasonable (0-3)
+	if h.Profile > 3 {
+		t.Errorf("Profile = %d, out of range", h.Profile)
+	}
+
+	// SFIndex should be valid (0-12)
+	if h.SFIndex > 12 {
+		t.Errorf("SFIndex = %d, out of range", h.SFIndex)
+	}
+
+	// Frame length should be reasonable
+	if h.AACFrameLength < 7 || h.AACFrameLength > 8192 {
+		t.Errorf("AACFrameLength = %d, out of range", h.AACFrameLength)
+	}
+
+	// HeaderSize should match ProtectionAbsent
+	expectedSize := 7
+	if !h.ProtectionAbsent {
+		expectedSize = 9
+	}
+	if h.HeaderSize() != expectedSize {
+		t.Errorf("HeaderSize() = %d, want %d", h.HeaderSize(), expectedSize)
+	}
+
+	t.Logf("Parsed ADTS header: Profile=%d, SFIndex=%d, Channels=%d, FrameLen=%d",
+		h.Profile, h.SFIndex, h.ChannelConfiguration, h.AACFrameLength)
+}
+
+func TestParseADTS_MultipleFrames(t *testing.T) {
+	data, err := os.ReadFile("../../testdata/sine1k.aac")
+	if err != nil {
+		t.Skipf("Test file not available: %v", err)
+	}
+
+	offset := 0
+	frameCount := 0
+	maxFrames := 5
+
+	for offset < len(data) && frameCount < maxFrames {
+		r := bits.NewReader(data[offset:])
+		h, err := ParseADTS(r)
+		if err != nil {
+			t.Fatalf("Frame %d: ParseADTS failed: %v", frameCount, err)
+		}
+
+		if h.AACFrameLength < 7 {
+			t.Fatalf("Frame %d: invalid frame length %d", frameCount, h.AACFrameLength)
+		}
+
+		t.Logf("Frame %d: length=%d, channels=%d", frameCount, h.AACFrameLength, h.ChannelConfiguration)
+
+		offset += int(h.AACFrameLength)
+		frameCount++
+	}
+
+	if frameCount == 0 {
+		t.Error("No frames parsed")
 	}
 }

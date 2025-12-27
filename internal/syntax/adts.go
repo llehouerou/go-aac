@@ -142,3 +142,33 @@ func parseErrorCheck(r *bits.Reader, h *ADTSHeader) {
 		h.CRCCheck = uint16(r.GetBits(16))
 	}
 }
+
+// ParseADTS parses a complete ADTS frame header from the bitstream.
+// It searches for the syncword, then parses fixed header, variable header,
+// and CRC (if present).
+//
+// Returns the parsed header or an error if no syncword is found.
+//
+// Ported from: adts_frame() in ~/dev/faad2/libfaad/syntax.c:2449-2458
+func ParseADTS(r *bits.Reader) (*ADTSHeader, error) {
+	h := &ADTSHeader{}
+
+	// Find and consume syncword
+	if err := FindSyncword(r); err != nil {
+		return nil, err
+	}
+	h.Syncword = ADTSSyncword
+
+	// Parse fixed header (16 bits)
+	if err := parseFixedHeader(r, h); err != nil {
+		return nil, err
+	}
+
+	// Parse variable header (28 bits)
+	parseVariableHeader(r, h)
+
+	// Parse error check (CRC if present)
+	parseErrorCheck(r, h)
+
+	return h, nil
+}
