@@ -464,3 +464,19 @@ func TestDecodeBinaryQuad_KnownCodewords(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeBinaryPair(t *testing.T) {
+	for _, cb := range []uint8{5, 7, 9} {
+		t.Run(fmt.Sprintf("codebook_%d", cb), func(t *testing.T) {
+			data := []byte{0x00, 0x00, 0x00, 0x00}
+			r := bits.NewReader(data)
+
+			var sp [2]int16
+			err := decodeBinaryPair(cb, r, sp[:])
+
+			if err != nil {
+				t.Errorf("codebook %d: unexpected error: %v", cb, err)
+			}
+		})
+	}
+}

@@ -189,3 +189,24 @@ func decodeBinaryQuad(r *bits.Reader, sp []int16) error {
 
 	return nil
 }
+
+// decodeBinaryPair decodes a pair using binary search.
+// Used for codebooks 5, 7, and 9.
+//
+// Ported from: huffman_binary_pair() in ~/dev/faad2/libfaad/huffman.c:276-298
+func decodeBinaryPair(cb uint8, r *bits.Reader, sp []int16) error {
+	offset := uint16(0)
+	table := *HCBBinPairTable[cb]
+
+	// Traverse until we hit a leaf
+	for table[offset].IsLeaf == 0 {
+		b := r.Get1Bit()
+		offset += uint16(table[offset].Data[b])
+	}
+
+	// Extract the two values from the leaf
+	sp[0] = int16(table[offset].Data[0])
+	sp[1] = int16(table[offset].Data[1])
+
+	return nil
+}
