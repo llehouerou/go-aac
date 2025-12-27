@@ -205,3 +205,43 @@ func TestParseFixedHeader(t *testing.T) {
 		t.Errorf("ChannelConfiguration = %d, want 2 (stereo)", h.ChannelConfiguration)
 	}
 }
+
+func TestParseVariableHeader(t *testing.T) {
+	// Variable header is 28 bits:
+	// copyright_id_bit=0 (1 bit)
+	// copyright_id_start=0 (1 bit)
+	// frame_length=0x0180 (13 bits) = 384 bytes
+	// buffer_fullness=0x7FF (11 bits) = VBR marker
+	// num_raw_blocks=0 (2 bits) = 1 raw block
+
+	// Bit layout (28 bits total, MSB first):
+	// Pos  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27
+	//      c  c  |--------- frame_length (13 bits) ---------|  |-- buffer_fullness (11) --|  nb
+	//      0  0  0  0  0  0  1  1  0  0  0  0  0  0  0  1  1  1  1  1  1  1  1  1  1  1  0  0
+	//
+	// Byte 0 (bits 0-7):   00000011 = 0x03
+	// Byte 1 (bits 8-15):  00000001 = 0x01
+	// Byte 2 (bits 16-23): 11111111 = 0xFF
+	// Byte 3 (bits 24-27): 1100xxxx = 0xC0
+	data := []byte{0x03, 0x01, 0xFF, 0xC0}
+	r := bits.NewReader(data)
+
+	h := &ADTSHeader{}
+	parseVariableHeader(r, h)
+
+	if h.CopyrightIDBit {
+		t.Error("CopyrightIDBit = true, want false")
+	}
+	if h.CopyrightIDStart {
+		t.Error("CopyrightIDStart = true, want false")
+	}
+	if h.AACFrameLength != 384 {
+		t.Errorf("AACFrameLength = %d, want 384", h.AACFrameLength)
+	}
+	if h.ADTSBufferFullness != 0x7FF {
+		t.Errorf("ADTSBufferFullness = 0x%X, want 0x7FF", h.ADTSBufferFullness)
+	}
+	if h.NoRawDataBlocksInFrame != 0 {
+		t.Errorf("NoRawDataBlocksInFrame = %d, want 0", h.NoRawDataBlocksInFrame)
+	}
+}

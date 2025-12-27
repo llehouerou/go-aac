@@ -122,3 +122,14 @@ func parseFixedHeader(r *bits.Reader, h *ADTSHeader) error {
 
 	return nil
 }
+
+// parseVariableHeader parses the ADTS variable header (28 bits).
+//
+// Ported from: adts_variable_header() in ~/dev/faad2/libfaad/syntax.c:2517-2528
+func parseVariableHeader(r *bits.Reader, h *ADTSHeader) {
+	h.CopyrightIDBit = r.Get1Bit() == 1
+	h.CopyrightIDStart = r.Get1Bit() == 1
+	h.AACFrameLength = uint16(r.GetBits(13))
+	h.ADTSBufferFullness = uint16(r.GetBits(11))
+	h.NoRawDataBlocksInFrame = uint8(r.GetBits(2))
+}
