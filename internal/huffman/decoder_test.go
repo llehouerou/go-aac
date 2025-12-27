@@ -380,3 +380,87 @@ func TestGetEscape(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeBinaryQuad(t *testing.T) {
+	// Codebook 3 uses binary search with HCB3 table
+	// Each node either has IsLeaf=1 (Data[0..3] are values)
+	// or IsLeaf=0 (Data[0], Data[1] are branch offsets for bit 0 and 1)
+
+	// Test with all zeros - trace through the tree:
+	// Starting at index 0: {0, [4]int8{1, 2, 0, 0}} -> IsLeaf=0, bit 0 -> offset += 1
+	// At index 1: {1, [4]int8{0, 0, 0, 0}} -> IsLeaf=1, values (0, 0, 0, 0)
+	data := []byte{0x00, 0x00, 0x00, 0x00}
+	r := bits.NewReader(data)
+
+	var sp [4]int16
+	err := decodeBinaryQuad(r, sp[:])
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	expected := [4]int16{0, 0, 0, 0}
+	if sp != expected {
+		t.Errorf("got %v, want %v", sp, expected)
+	}
+}
+
+func TestDecodeBinaryQuad_KnownCodewords(t *testing.T) {
+	// Test specific known codewords from hcb3 table
+	tests := []struct {
+		name     string
+		data     []byte
+		expected [4]int16
+	}{
+		{
+			// Codeword "0" (1 bit) -> index 1: {1, [4]int8{0, 0, 0, 0}}
+			// Path: 0 -> bit 0 -> offset += 1 -> index 1 (leaf)
+			name:     "codeword_0_values_0000",
+			data:     []byte{0x00}, // 0b00000000
+			expected: [4]int16{0, 0, 0, 0},
+		},
+		{
+			// Codeword "1000" (4 bits) -> index 9: {1, [4]int8{1, 0, 0, 0}}
+			// Path: 0 -> bit 1 -> offset += 2 -> index 2
+			//       2 -> bit 0 -> offset += 1 -> index 3
+			//       3 -> bit 0 -> offset += 2 -> index 5
+			//       5 -> bit 0 -> offset += 4 -> index 9 (leaf)
+			name:     "codeword_1000_values_1000",
+			data:     []byte{0x80}, // 0b10000000
+			expected: [4]int16{1, 0, 0, 0},
+		},
+		{
+			// Codeword "1001" (4 bits) -> index 10: {1, [4]int8{0, 0, 0, 1}}
+			// Path: 0 -> bit 1 -> offset += 2 -> index 2
+			//       2 -> bit 0 -> offset += 1 -> index 3
+			//       3 -> bit 0 -> offset += 2 -> index 5
+			//       5 -> bit 1 -> offset += 5 -> index 10 (leaf)
+			name:     "codeword_1001_values_0001",
+			data:     []byte{0x90}, // 0b10010000
+			expected: [4]int16{0, 0, 0, 1},
+		},
+		{
+			// Codeword "1010" (4 bits) -> index 11: {1, [4]int8{0, 1, 0, 0}}
+			// Path: 0 -> bit 1 -> offset += 2 -> index 2
+			//       2 -> bit 0 -> offset += 1 -> index 3
+			//       3 -> bit 1 -> offset += 3 -> index 6
+			//       6 -> bit 0 -> offset += 5 -> index 11 (leaf)
+			name:     "codeword_1010_values_0100",
+			data:     []byte{0xA0}, // 0b10100000
+			expected: [4]int16{0, 1, 0, 0},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := bits.NewReader(tt.data)
+			var sp [4]int16
+			err := decodeBinaryQuad(r, sp[:])
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if sp != tt.expected {
+				t.Errorf("got %v, want %v", sp, tt.expected)
+			}
+		})
+	}
+}

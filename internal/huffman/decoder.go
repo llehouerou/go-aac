@@ -163,3 +163,29 @@ func decode2StepPair(cb uint8, r *bits.Reader, sp []int16) error {
 
 	return nil
 }
+
+// decodeBinaryQuad decodes a quadruple using binary search.
+// Used only for codebook 3.
+//
+// Traverse the binary tree by reading one bit at a time until
+// reaching a leaf node (IsLeaf = 1), then extract the 4 values.
+//
+// Ported from: huffman_binary_quad() in ~/dev/faad2/libfaad/huffman.c:244-266
+func decodeBinaryQuad(r *bits.Reader, sp []int16) error {
+	offset := uint16(0)
+	table := *HCB3
+
+	// Traverse until we hit a leaf
+	for table[offset].IsLeaf == 0 {
+		b := r.Get1Bit()
+		offset += uint16(table[offset].Data[b])
+	}
+
+	// Extract the four values from the leaf
+	sp[0] = int16(table[offset].Data[0])
+	sp[1] = int16(table[offset].Data[1])
+	sp[2] = int16(table[offset].Data[2])
+	sp[3] = int16(table[offset].Data[3])
+
+	return nil
+}
