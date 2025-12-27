@@ -97,6 +97,27 @@ func TestIQTable_Formula(t *testing.T) {
 	}
 }
 
+func TestPow2SFTable_Size(t *testing.T) {
+	// pow2sf_tab in specrec.c has 64 entries
+	if len(Pow2SFTable) != 64 {
+		t.Errorf("Pow2SFTable size: got %d, want 64", len(Pow2SFTable))
+	}
+}
+
+func TestPow2SFTable_Values(t *testing.T) {
+	// Values from ~/dev/faad2/libfaad/specrec.c:501-523
+	expected := []float64{
+		2.9802322387695313e-008, 5.9604644775390625e-008, 1.1920928955078125e-007,
+		2.384185791015625e-007, 4.76837158203125e-007, 9.5367431640625e-007,
+	}
+	for i, want := range expected {
+		got := Pow2SFTable[i]
+		if !floatEquals(got, want, 1e-20) {
+			t.Errorf("Pow2SFTable[%d]: got %.17g, want %.17g", i, got, want)
+		}
+	}
+}
+
 func TestIQuant(t *testing.T) {
 	tests := []struct {
 		name     string
