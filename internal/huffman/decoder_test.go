@@ -251,6 +251,67 @@ func TestDecode2StepQuad_LongerCodeword(t *testing.T) {
 	}
 }
 
+func TestDecode2StepPair(t *testing.T) {
+	// Test with a known codeword from codebook 6
+	// The first entry in hcb6_2 (index 0) has bits=4, x=0, y=0
+	// which corresponds to codeword "0000" (4 bits)
+	// From hcb6_1[0]: offset=0, extra_bits=0
+
+	// So bit pattern 00000xxx (first 5 bits = 0) should give (0,0)
+	data := []byte{0x00, 0x00}
+	r := bits.NewReader(data)
+
+	var sp [2]int16
+	err := decode2StepPair(6, r, sp[:])
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	expected := [2]int16{0, 0}
+	if sp != expected {
+		t.Errorf("got %v, want %v", sp, expected)
+	}
+}
+
+func TestDecode2StepPair_AllCodebooks(t *testing.T) {
+	for _, cb := range []uint8{6, 8, 10, 11} {
+		t.Run(fmt.Sprintf("codebook_%d", cb), func(t *testing.T) {
+			data := []byte{0x00, 0x00, 0x00, 0x00}
+			r := bits.NewReader(data)
+
+			var sp [2]int16
+			err := decode2StepPair(cb, r, sp[:])
+
+			if err != nil {
+				t.Errorf("codebook %d: unexpected error: %v", cb, err)
+			}
+		})
+	}
+}
+
+func TestDecode2StepPair_LongerCodeword(t *testing.T) {
+	// Test a codeword that requires extra bits (6-bit codeword)
+	// For codebook 6:
+	// First 5 bits = 10010 (binary = 18) -> hcb6_1[18] = {9, 1} (offset: 9, extra_bits: 1)
+	// Next 1 bit = 0 -> final offset = 9 + 0 = 9
+	// hcb6_2[9] = {6, 2, -1} -> 6-bit codeword, values (2, -1)
+
+	// Bits: 10010 0xx xxxxx
+	data := []byte{0x90, 0x00} // 0b10010000 0b00000000
+	r := bits.NewReader(data)
+
+	var sp [2]int16
+	err := decode2StepPair(6, r, sp[:])
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	expected := [2]int16{2, -1}
+	if sp != expected {
+		t.Errorf("got %v, want %v", sp, expected)
+	}
+}
+
 func TestGetEscape(t *testing.T) {
 	tests := []struct {
 		name     string
