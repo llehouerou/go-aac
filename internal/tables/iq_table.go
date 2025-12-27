@@ -1,6 +1,8 @@
 // Package tables contains lookup tables for AAC decoding.
 package tables
 
+//go:generate go run generate_iq_table.go
+
 // IQTableSize is the number of entries in the inverse quantization table.
 // Ported from: IQ_TABLE_SIZE in ~/dev/faad2/libfaad/iq_table.h:44
 const IQTableSize = 8192
