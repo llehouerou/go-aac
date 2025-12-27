@@ -1,8 +1,42 @@
 // internal/syntax/adts.go
 package syntax
 
+import (
+	"errors"
+
+	"github.com/llehouerou/go-aac/internal/bits"
+)
+
 // ADTSSyncword is the 12-bit sync pattern for ADTS frames.
 const ADTSSyncword = 0x0FFF
+
+// ErrADTSSyncwordNotFound is returned when no ADTS syncword is found.
+var ErrADTSSyncwordNotFound = errors.New("unable to find ADTS syncword")
+
+// MaxSyncSearchBytes is the maximum bytes to search for ADTS syncword.
+// Matches FAAD2's limit of 768 bytes.
+const MaxSyncSearchBytes = 768
+
+// FindSyncword searches for the ADTS syncword (0xFFF) in the bitstream.
+// It will skip up to MaxSyncSearchBytes looking for the sync pattern.
+// After finding the syncword, the 12 syncword bits are consumed.
+// Returns ErrADTSSyncwordNotFound if no syncword is found.
+//
+// Ported from: adts_fixed_header() sync recovery loop in
+// ~/dev/faad2/libfaad/syntax.c:2466-2482
+func FindSyncword(r *bits.Reader) error {
+	for i := 0; i < MaxSyncSearchBytes; i++ {
+		syncword := r.ShowBits(12)
+		if syncword == ADTSSyncword {
+			// Found it - consume the syncword
+			r.FlushBits(12)
+			return nil
+		}
+		// Skip 8 bits and try again
+		r.FlushBits(8)
+	}
+	return ErrADTSSyncwordNotFound
+}
 
 // ADTSHeader contains Audio Data Transport Stream header data.
 // ADTS is the most common AAC transport format (used in .aac files).
