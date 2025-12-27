@@ -24,3 +24,17 @@ func ScaleFactor(r *bits.Reader) int8 {
 	// Return the value at the leaf node, adjusted to signed delta
 	return int8(sf[offset][0]) - 60
 }
+
+// signBits reads sign bits for non-zero spectral coefficients.
+// For each non-zero value in sp, reads 1 bit: if 1, negates the value.
+//
+// Ported from: huffman_sign_bits() in ~/dev/faad2/libfaad/huffman.c:93-108
+func signBits(r *bits.Reader, sp []int16) {
+	for i := range sp {
+		if sp[i] != 0 {
+			if r.Get1Bit()&1 != 0 {
+				sp[i] = -sp[i]
+			}
+		}
+	}
+}

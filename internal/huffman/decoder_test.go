@@ -114,3 +114,74 @@ func TestScaleFactor_ConsecutiveDecoding(t *testing.T) {
 		t.Errorf("Third ScaleFactor() = %d, want 1", sf3)
 	}
 }
+
+func TestSignBits(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []int16
+		bits     []uint8 // sign bits to inject
+		expected []int16
+	}{
+		{
+			name:     "no non-zero values",
+			input:    []int16{0, 0, 0, 0},
+			bits:     []uint8{},
+			expected: []int16{0, 0, 0, 0},
+		},
+		{
+			name:     "single positive stays positive (bit=0)",
+			input:    []int16{5, 0, 0, 0},
+			bits:     []uint8{0},
+			expected: []int16{5, 0, 0, 0},
+		},
+		{
+			name:     "single positive becomes negative (bit=1)",
+			input:    []int16{5, 0, 0, 0},
+			bits:     []uint8{1},
+			expected: []int16{-5, 0, 0, 0},
+		},
+		{
+			name:     "multiple values with mixed signs",
+			input:    []int16{3, 0, 7, 2},
+			bits:     []uint8{0, 1, 0}, // Only non-zero get bits
+			expected: []int16{3, 0, -7, 2},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Build bitstream from sign bits
+			data := buildSignBitstream(tc.bits)
+			r := bits.NewReader(data)
+
+			sp := make([]int16, len(tc.input))
+			copy(sp, tc.input)
+
+			signBits(r, sp)
+
+			for i := range sp {
+				if sp[i] != tc.expected[i] {
+					t.Errorf("sp[%d]: got %d, want %d", i, sp[i], tc.expected[i])
+				}
+			}
+		})
+	}
+}
+
+// buildSignBitstream creates a byte slice from a sequence of bits
+func buildSignBitstream(signBits []uint8) []byte {
+	if len(signBits) == 0 {
+		return []byte{0}
+	}
+	// Pack bits into bytes (MSB first)
+	numBytes := (len(signBits) + 7) / 8
+	data := make([]byte, numBytes)
+	for i, bit := range signBits {
+		byteIdx := i / 8
+		bitIdx := 7 - (i % 8) // MSB first
+		if bit != 0 {
+			data[byteIdx] |= 1 << bitIdx
+		}
+	}
+	return data
+}
