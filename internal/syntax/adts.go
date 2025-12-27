@@ -133,3 +133,12 @@ func parseVariableHeader(r *bits.Reader, h *ADTSHeader) {
 	h.ADTSBufferFullness = uint16(r.GetBits(11))
 	h.NoRawDataBlocksInFrame = uint8(r.GetBits(2))
 }
+
+// parseErrorCheck reads the CRC if protection is enabled.
+//
+// Ported from: adts_error_check() in ~/dev/faad2/libfaad/syntax.c:2532-2538
+func parseErrorCheck(r *bits.Reader, h *ADTSHeader) {
+	if !h.ProtectionAbsent {
+		h.CRCCheck = uint16(r.GetBits(16))
+	}
+}

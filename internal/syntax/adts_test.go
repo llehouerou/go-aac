@@ -245,3 +245,35 @@ func TestParseVariableHeader(t *testing.T) {
 		t.Errorf("NoRawDataBlocksInFrame = %d, want 0", h.NoRawDataBlocksInFrame)
 	}
 }
+
+func TestParseErrorCheck_WithCRC(t *testing.T) {
+	// CRC is 16 bits, read when protection_absent=0
+	data := []byte{0xAB, 0xCD, 0x00, 0x00}
+	r := bits.NewReader(data)
+
+	h := &ADTSHeader{ProtectionAbsent: false}
+	parseErrorCheck(r, h)
+
+	if h.CRCCheck != 0xABCD {
+		t.Errorf("CRCCheck = 0x%X, want 0xABCD", h.CRCCheck)
+	}
+
+	consumed := r.GetProcessedBits()
+	if consumed != 16 {
+		t.Errorf("consumed %d bits, want 16", consumed)
+	}
+}
+
+func TestParseErrorCheck_NoCRC(t *testing.T) {
+	data := []byte{0xAB, 0xCD, 0x00, 0x00}
+	r := bits.NewReader(data)
+
+	h := &ADTSHeader{ProtectionAbsent: true}
+	parseErrorCheck(r, h)
+
+	// Should not consume any bits when protection_absent=true
+	consumed := r.GetProcessedBits()
+	if consumed != 0 {
+		t.Errorf("consumed %d bits, want 0 (no CRC)", consumed)
+	}
+}
