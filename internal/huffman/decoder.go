@@ -1,7 +1,14 @@
 // Package huffman implements AAC Huffman decoding.
 package huffman
 
-import "github.com/llehouerou/go-aac/internal/bits"
+import (
+	"errors"
+
+	"github.com/llehouerou/go-aac/internal/bits"
+)
+
+// ErrEscapeSequence indicates a malformed escape sequence in spectral data.
+var ErrEscapeSequence = errors.New("huffman: invalid escape sequence")
 
 // ScaleFactor decodes a scale factor delta from the bitstream.
 // Returns a value in the range [-60, 60] representing the delta
@@ -37,4 +44,52 @@ func signBits(r *bits.Reader, sp []int16) {
 			}
 		}
 	}
+}
+
+// getEscape decodes an escape code if the value is ±16.
+// For escape codebook (11), values of ±16 indicate more bits follow.
+// Returns error if escape sequence is malformed.
+//
+// Format: N ones followed by a zero (N >= 4), then N bits of magnitude.
+// Final value = (1 << N) | magnitude_bits
+//
+// Ported from: huffman_getescape() in ~/dev/faad2/libfaad/huffman.c:110-148
+func getEscape(r *bits.Reader, sp *int16) error {
+	x := *sp
+
+	// Check if this is an escape value
+	var neg bool
+	if x < 0 {
+		if x != -16 {
+			return nil // Not an escape
+		}
+		neg = true
+	} else {
+		if x != 16 {
+			return nil // Not an escape
+		}
+		neg = false
+	}
+
+	// Count leading ones (starting from i=4, since 16 = 2^4)
+	var i uint
+	for i = 4; i < 16; i++ {
+		if r.Get1Bit() == 0 {
+			break
+		}
+	}
+	if i >= 16 {
+		return ErrEscapeSequence
+	}
+
+	// Read i bits for the offset
+	off := int16(r.GetBits(i))
+	j := off | (1 << i)
+
+	if neg {
+		j = -j
+	}
+
+	*sp = j
+	return nil
 }

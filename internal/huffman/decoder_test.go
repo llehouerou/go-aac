@@ -185,3 +185,72 @@ func buildSignBitstream(signBits []uint8) []byte {
 	}
 	return data
 }
+
+func TestGetEscape(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    int16
+		bits     []uint8 // escape bits: N ones, zero, then N-bit value
+		expected int16
+		err      bool
+	}{
+		{
+			name:     "not an escape value (positive)",
+			input:    15,
+			bits:     []uint8{},
+			expected: 15,
+		},
+		{
+			name:     "not an escape value (negative)",
+			input:    -15,
+			bits:     []uint8{},
+			expected: -15,
+		},
+		{
+			name:     "positive escape: 4 ones + zero + 4 bits = 17-31",
+			input:    16,
+			bits:     []uint8{0, 0, 0, 0, 1}, // 4 zeros (i starts at 4), value bits = 0001 = 1
+			expected: 17,                     // (1 << 4) | 1 = 17
+		},
+		{
+			name:     "negative escape: 4 ones + zero + 4 bits",
+			input:    -16,
+			bits:     []uint8{0, 0, 0, 0, 1}, // Same as above but negative
+			expected: -17,
+		},
+		{
+			name:     "escape with more leading ones: 5-bit exponent",
+			input:    16,
+			bits:     []uint8{1, 0, 0, 0, 0, 0, 1}, // 1 one, zero, then 5 bits = 00001 = 1
+			expected: 33,                           // (1 << 5) | 1 = 33
+		},
+		{
+			name:  "malformed escape: too many leading ones",
+			input: 16,
+			// 12 ones would make i=16 (starting at 4), which is an error
+			bits:     []uint8{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+			expected: 16, // unchanged on error
+			err:      true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			data := buildSignBitstream(tc.bits)
+			r := bits.NewReader(data)
+
+			sp := tc.input
+			err := getEscape(r, &sp)
+
+			if tc.err && err == nil {
+				t.Error("expected error, got nil")
+			}
+			if !tc.err && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if sp != tc.expected {
+				t.Errorf("got %d, want %d", sp, tc.expected)
+			}
+		})
+	}
+}
