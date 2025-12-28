@@ -90,3 +90,90 @@ func TestParseChannelPairElement_Signature(t *testing.T) {
 	type parserFunc func(*bits.Reader, uint8, *CPEConfig) (*CPEResult, error)
 	var _ parserFunc = ParseChannelPairElement
 }
+
+func TestParseMSMask_Reserved(t *testing.T) {
+	// Test that ms_mask_present == 3 returns error
+	// Build bitstream with ms_mask_present = 3 (binary: 11)
+	data := []byte{0xC0} // 11 + padding
+	r := bits.NewReader(data)
+
+	ics := &ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          10,
+	}
+
+	err := parseMSMask(r, ics)
+	if err != ErrMSMaskReserved {
+		t.Errorf("Expected ErrMSMaskReserved, got %v", err)
+	}
+}
+
+func TestParseMSMask_NoMS(t *testing.T) {
+	// Test ms_mask_present == 0 (no M/S stereo)
+	data := []byte{0x00} // 00 + padding
+	r := bits.NewReader(data)
+
+	ics := &ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          10,
+	}
+
+	err := parseMSMask(r, ics)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if ics.MSMaskPresent != 0 {
+		t.Errorf("MSMaskPresent = %d, want 0", ics.MSMaskPresent)
+	}
+}
+
+func TestParseMSMask_AllMS(t *testing.T) {
+	// Test ms_mask_present == 2 (all bands use M/S)
+	data := []byte{0x80} // 10 + padding
+	r := bits.NewReader(data)
+
+	ics := &ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          10,
+	}
+
+	err := parseMSMask(r, ics)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if ics.MSMaskPresent != 2 {
+		t.Errorf("MSMaskPresent = %d, want 2", ics.MSMaskPresent)
+	}
+}
+
+func TestParseMSMask_PerBand(t *testing.T) {
+	// Test ms_mask_present == 1 (per-band mask)
+	// With NumWindowGroups=1, MaxSFB=4: need 4 bits for mask
+	// Bitstream: 01 (ms_mask=1) + 1010 (mask bits) + padding
+	// = 0110_1000 = 0x68
+	// After reading 2 bits for ms_mask (01), remaining bits are:
+	// 1, 0, 1, 0 (read left-to-right from MSB)
+	data := []byte{0x68}
+	r := bits.NewReader(data)
+
+	ics := &ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          4,
+	}
+
+	err := parseMSMask(r, ics)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if ics.MSMaskPresent != 1 {
+		t.Errorf("MSMaskPresent = %d, want 1", ics.MSMaskPresent)
+	}
+
+	// Check mask bits: 1, 0, 1, 0
+	expected := []uint8{1, 0, 1, 0}
+	for i, exp := range expected {
+		if ics.MSUsed[0][i] != exp {
+			t.Errorf("MSUsed[0][%d] = %d, want %d", i, ics.MSUsed[0][i], exp)
+		}
+	}
+}
