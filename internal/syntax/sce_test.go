@@ -63,3 +63,14 @@ func TestSCEResult_Fields(t *testing.T) {
 		t.Errorf("len(SpecData) = %d, want 1024", len(result.SpecData))
 	}
 }
+
+func TestErrIntensityStereoInSCE(t *testing.T) {
+	if ErrIntensityStereoInSCE == nil {
+		t.Error("ErrIntensityStereoInSCE should not be nil")
+	}
+
+	expectedMsg := "syntax: intensity stereo not allowed in single channel element"
+	if ErrIntensityStereoInSCE.Error() != expectedMsg {
+		t.Errorf("Error message = %q, want %q", ErrIntensityStereoInSCE.Error(), expectedMsg)
+	}
+}

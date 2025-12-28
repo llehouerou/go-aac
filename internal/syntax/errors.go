@@ -66,3 +66,11 @@ var (
 	// ErrGainControlNotSupported indicates gain control (SSR profile) is not supported.
 	ErrGainControlNotSupported = errors.New("syntax: gain control (SSR) not supported")
 )
+
+// SCE/LFE errors.
+var (
+	// ErrIntensityStereoInSCE indicates intensity stereo was used in a single channel element.
+	// Intensity stereo is only valid in Channel Pair Elements (CPE).
+	// FAAD2 error code: 32
+	ErrIntensityStereoInSCE = errors.New("syntax: intensity stereo not allowed in single channel element")
+)
