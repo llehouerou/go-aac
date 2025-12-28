@@ -51,3 +51,9 @@ var (
 	// ErrScaleFactorRange indicates a scale factor is out of the valid range [0, 255].
 	ErrScaleFactorRange = errors.New("syntax: scale factor out of range [0, 255]")
 )
+
+// Pulse data errors.
+var (
+	// ErrPulseStartSFB indicates pulse_start_sfb exceeds num_swb.
+	ErrPulseStartSFB = errors.New("syntax: pulse_start_sfb exceeds num_swb")
+)
