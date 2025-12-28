@@ -36,11 +36,14 @@ const (
 type ExtensionType uint8
 
 // Extension Types.
+// Source: ~/dev/faad2/libfaad/sbr_syntax.h:43-44 (for SBR types)
 const (
 	ExtFil          ExtensionType = 0  // Filler extension
 	ExtFillData     ExtensionType = 1  // Fill with MPEG surround data
 	ExtDataElement  ExtensionType = 2  // Data element
 	ExtDynamicRange ExtensionType = 11 // Dynamic Range Control
+	ExtSBRData      ExtensionType = 13 // SBR data (without CRC)
+	ExtSBRDataCRC   ExtensionType = 14 // SBR data (with CRC)
 )
 
 // AncData is the ancillary data type.
