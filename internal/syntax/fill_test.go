@@ -243,3 +243,90 @@ func TestParseDynamicRangeInfo_MultiBand(t *testing.T) {
 		t.Errorf("DynRngCtl = %v, want [10, 20, 30]", drc.DynRngCtl[:3])
 	}
 }
+
+func TestParseExtensionPayload_DynamicRange(t *testing.T) {
+	// Extension type: EXT_DYNAMIC_RANGE (11)
+	// Followed by minimal DRC data
+	//
+	// extension_type: 4 bits = 1011 (11)
+	// Then dynamic_range_info:
+	// - has_instance_tag: 0
+	// - excluded_chns_present: 0
+	// - has_bands_data: 0
+	// - has_prog_ref_level: 0
+	// - dyn_rng_sgn: 0
+	// - dyn_rng_ctl: 7 bits = 0x55 (85)
+
+	data := []byte{0xB0, 0x55}
+	r := bits.NewReader(data)
+	drc := &DRCInfo{}
+
+	bytesRead := parseExtensionPayload(r, drc, 2)
+
+	// dynamic_range_info returns 2 (n starts at 1, plus 1 for dyn_rng)
+	if bytesRead != 2 {
+		t.Errorf("bytesRead = %d, want 2", bytesRead)
+	}
+
+	if !drc.Present {
+		t.Error("drc.Present should be true")
+	}
+
+	if drc.DynRngCtl[0] != 0x55 {
+		t.Errorf("DynRngCtl[0] = %d, want 85", drc.DynRngCtl[0])
+	}
+}
+
+func TestParseExtensionPayload_FillData(t *testing.T) {
+	// Extension type: EXT_FILL_DATA (1)
+	// Followed by fill_nibble (4 bits = 0000) + fill_bytes
+	//
+	// extension_type: 4 bits = 0001
+	// fill_nibble: 4 bits = 0000
+	// fill_byte[0]: 8 bits = 0xA5
+	// fill_byte[1]: 8 bits = 0xA5
+
+	data := []byte{0x10, 0xA5, 0xA5}
+	r := bits.NewReader(data)
+	drc := &DRCInfo{}
+
+	bytesRead := parseExtensionPayload(r, drc, 3)
+
+	// EXT_FILL_DATA returns count
+	if bytesRead != 3 {
+		t.Errorf("bytesRead = %d, want 3", bytesRead)
+	}
+}
+
+func TestParseExtensionPayload_Filler(t *testing.T) {
+	// Extension type: EXT_FIL (0)
+	// Just reads fill_nibble (4 bits) + remaining bytes
+
+	data := []byte{0x00, 0xFF}
+	r := bits.NewReader(data)
+	drc := &DRCInfo{}
+
+	bytesRead := parseExtensionPayload(r, drc, 2)
+
+	if bytesRead != 2 {
+		t.Errorf("bytesRead = %d, want 2", bytesRead)
+	}
+}
+
+func TestParseExtensionPayload_DataElement(t *testing.T) {
+	// Extension type: EXT_DATA_ELEMENT (2)
+	// data_element_version: 4 bits = 0 (ANC_DATA)
+	// dataElementLengthPart: 8 bits = 5 (length)
+	// data_element_byte[0-4]: 5 bytes
+
+	data := []byte{0x20, 0x05, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE}
+	r := bits.NewReader(data)
+	drc := &DRCInfo{}
+
+	bytesRead := parseExtensionPayload(r, drc, 10)
+
+	// dataElementLength=5, loopCounter=1, +1 = 7
+	if bytesRead != 7 {
+		t.Errorf("bytesRead = %d, want 7", bytesRead)
+	}
+}

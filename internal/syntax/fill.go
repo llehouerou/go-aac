@@ -95,3 +95,70 @@ func parseDynamicRangeInfo(r *bits.Reader, drc *DRCInfo) uint8 {
 
 	return n
 }
+
+// parseExtensionPayload parses an extension_payload() element.
+// Returns the number of payload bytes consumed.
+//
+// Ported from: extension_payload() in ~/dev/faad2/libfaad/syntax.c:2240-2299
+func parseExtensionPayload(r *bits.Reader, drc *DRCInfo, count uint16) uint16 {
+	var align uint8 = 4
+
+	extensionType := ExtensionType(r.GetBits(4))
+
+	switch extensionType {
+	case ExtDynamicRange:
+		drc.Present = true
+		n := parseDynamicRangeInfo(r, drc)
+		return uint16(n)
+
+	case ExtFillData:
+		// fill_nibble (must be 0000)
+		_ = r.GetBits(4)
+		// fill_byte (must be 0xA5 "10100101")
+		for i := uint16(0); i < count-1; i++ {
+			_ = r.GetBits(8)
+		}
+		return count
+
+	case ExtDataElement:
+		dataElementVersion := r.GetBits(4)
+		switch dataElementVersion {
+		case AncData:
+			loopCounter := uint16(0)
+			dataElementLength := uint16(0)
+			for {
+				dataElementLengthPart := uint8(r.GetBits(8))
+				dataElementLength += uint16(dataElementLengthPart)
+				loopCounter++
+				if dataElementLengthPart != 255 {
+					break
+				}
+			}
+			// Read first data_element_byte if present
+			// Note: FAAD2 returns after reading only the first byte, which seems like a bug
+			// in the original C code (the for loop reads one byte then returns).
+			// We follow the same behavior for compatibility.
+			if dataElementLength > 0 {
+				_ = r.GetBits(8)
+				return dataElementLength + loopCounter + 1
+			}
+			// If dataElementLength is 0
+			return loopCounter + 1
+		default:
+			align = 0
+		}
+		fallthrough
+
+	case ExtFil:
+		fallthrough
+
+	default:
+		// Read fill_nibble or align bits
+		r.GetBits(uint(align))
+		// Read remaining bytes
+		for i := uint16(0); i < count-1; i++ {
+			_ = r.GetBits(8)
+		}
+		return count
+	}
+}
