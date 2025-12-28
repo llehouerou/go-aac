@@ -242,8 +242,8 @@ func ParseASCFromBitstream(r *bits.Reader, bufferSize uint32, shortForm bool) (*
 
 	// Handle implicit SBR signaling (backward compatible extension)
 	if !shortForm {
-		bitsToDecose := int32(bufferSize*8) - int32(r.GetProcessedBits()-startPos)
-		if asc.ObjectTypeIndex != 5 && asc.ObjectTypeIndex != 29 && bitsToDecose >= 16 {
+		bitsToDecode := int32(bufferSize*8) - int32(r.GetProcessedBits()-startPos)
+		if asc.ObjectTypeIndex != 5 && asc.ObjectTypeIndex != 29 && bitsToDecode >= 16 {
 			// Look for syncExtensionType
 			syncExtType := r.GetBits(11)
 			if syncExtType == 0x2b7 {
