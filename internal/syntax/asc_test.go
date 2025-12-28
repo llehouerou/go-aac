@@ -505,3 +505,73 @@ func TestParseASCShortForm(t *testing.T) {
 		t.Errorf("ChannelsConfiguration = %d, want 2", asc.ChannelsConfiguration)
 	}
 }
+
+func TestParseASC_RealWorldConfigs(t *testing.T) {
+	tests := []struct {
+		name           string
+		data           []byte
+		wantObjType    uint8
+		wantSampleRate uint32
+		wantChannels   uint8
+		wantSBR        int8
+	}{
+		{
+			// Common iTunes AAC-LC config
+			name:           "iTunes AAC-LC 44100 stereo",
+			data:           []byte{0x12, 0x10}, // LC, 44100, stereo
+			wantObjType:    2,
+			wantSampleRate: 44100,
+			wantChannels:   2,
+			wantSBR:        -1, // unknown -> implicit handling
+		},
+		{
+			// HE-AAC config with explicit SBR
+			// Byte layout: 0x2B 0x92 0x08 0x00
+			// Binary: 00101011 10010010 00001000 00000000
+			// - Bits 0-4:   ObjectTypeIndex = 5 (SBR indicator)
+			// - Bits 5-8:   SamplingFrequencyIndex = 7 (22050 Hz core rate)
+			// - Bits 9-12:  ChannelsConfiguration = 2 (stereo)
+			// - Bits 13-16: ExtensionSamplingFrequencyIndex = 4 (44100 Hz output rate)
+			// - Bits 17-21: Core ObjectTypeIndex = 2 (AAC-LC core codec)
+			// Note: ObjectTypeIndex is set to the CORE codec type (2) per FAAD2 behavior.
+			// SBRPresentFlag=1 indicates HE-AAC.
+			name:           "HE-AAC 22050->44100 stereo",
+			data:           []byte{0x2B, 0x92, 0x08, 0x00},
+			wantObjType:    2,     // Core codec type (AAC-LC)
+			wantSampleRate: 44100, // Output rate (extension rate)
+			wantChannels:   2,
+			wantSBR:        1, // Explicit SBR present
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			asc, _, err := ParseASC(tt.data)
+			if err != nil {
+				t.Fatalf("ParseASC() error = %v", err)
+			}
+
+			if asc.ObjectTypeIndex != tt.wantObjType {
+				t.Errorf("ObjectTypeIndex = %d, want %d", asc.ObjectTypeIndex, tt.wantObjType)
+			}
+			// For implicit SBR handling, sample rate may be doubled
+			// Just verify it's reasonable
+			if tt.wantSBR == -1 {
+				// Implicit handling: either original or doubled
+				if asc.SamplingFrequency != tt.wantSampleRate && asc.SamplingFrequency != tt.wantSampleRate*2 {
+					t.Errorf("SamplingFrequency = %d, want %d or %d", asc.SamplingFrequency, tt.wantSampleRate, tt.wantSampleRate*2)
+				}
+			} else {
+				if asc.SamplingFrequency != tt.wantSampleRate {
+					t.Errorf("SamplingFrequency = %d, want %d", asc.SamplingFrequency, tt.wantSampleRate)
+				}
+			}
+			if asc.ChannelsConfiguration != tt.wantChannels {
+				t.Errorf("ChannelsConfiguration = %d, want %d", asc.ChannelsConfiguration, tt.wantChannels)
+			}
+			if tt.wantSBR != -1 && asc.SBRPresentFlag != tt.wantSBR {
+				t.Errorf("SBRPresentFlag = %d, want %d", asc.SBRPresentFlag, tt.wantSBR)
+			}
+		})
+	}
+}
