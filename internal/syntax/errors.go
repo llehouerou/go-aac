@@ -74,3 +74,10 @@ var (
 	// FAAD2 error code: 32
 	ErrIntensityStereoInSCE = errors.New("syntax: intensity stereo not allowed in single channel element")
 )
+
+// CPE errors.
+var (
+	// ErrMSMaskReserved indicates ms_mask_present has reserved value 3.
+	// FAAD2 error code: 32
+	ErrMSMaskReserved = errors.New("syntax: ms_mask_present value 3 is reserved")
+)
