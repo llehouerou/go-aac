@@ -3,6 +3,9 @@ package syntax
 import (
 	"fmt"
 	"testing"
+
+	"github.com/llehouerou/go-aac"
+	"github.com/llehouerou/go-aac/internal/bits"
 )
 
 func TestIsObjectTypeSupported(t *testing.T) {
@@ -63,6 +66,103 @@ func TestIsObjectTypeSupportedOutOfRange(t *testing.T) {
 			got := isObjectTypeSupported(objType)
 			if got {
 				t.Errorf("isObjectTypeSupported(%d) = true, want false for out-of-range type", objType)
+			}
+		})
+	}
+}
+
+func TestParseGASpecificConfig(t *testing.T) {
+	tests := []struct {
+		name            string
+		data            []byte
+		channelConfig   uint8
+		objectType      uint8
+		wantFrameLen    bool
+		wantDependsCore bool
+		wantExtension   bool
+		wantErr         bool
+	}{
+		{
+			name:            "basic LC no extensions",
+			data:            []byte{0x00}, // 0b00000000: frameLenFlag=0, dependsOnCore=0, extensionFlag=0
+			channelConfig:   2,
+			objectType:      2, // LC
+			wantFrameLen:    false,
+			wantDependsCore: false,
+			wantExtension:   false,
+			wantErr:         false,
+		},
+		{
+			name:            "with 960 frame length",
+			data:            []byte{0x80}, // 0b10000000: frameLenFlag=1
+			channelConfig:   2,
+			objectType:      2,
+			wantFrameLen:    true,
+			wantDependsCore: false,
+			wantExtension:   false,
+			wantErr:         false,
+		},
+		{
+			name:            "depends on core coder",
+			data:            []byte{0x40, 0x10, 0x00}, // 0b01000000 0b00010000 0b00000000: frameLenFlag=0, dependsOnCore=1, coreCoderDelay=256, extensionFlag=0
+			channelConfig:   2,
+			objectType:      2,
+			wantFrameLen:    false,
+			wantDependsCore: true,
+			wantExtension:   false,
+			wantErr:         false,
+		},
+		{
+			name:            "extension flag set for non-ER type",
+			data:            []byte{0x20}, // 0b00100000: frameLenFlag=0, dependsOnCore=0, extensionFlag=1, extensionFlag3=0
+			channelConfig:   2,
+			objectType:      2, // LC (not ER)
+			wantFrameLen:    false,
+			wantDependsCore: false,
+			wantExtension:   true,
+			wantErr:         false,
+		},
+		{
+			name:            "extension flag set for ER type",
+			data:            []byte{0x20}, // 0b00100000: frameLenFlag=0, dependsOnCore=0, extensionFlag=1, then 3 resilience bits + extensionFlag3
+			channelConfig:   2,
+			objectType:      17, // ER AAC LC
+			wantFrameLen:    false,
+			wantDependsCore: false,
+			wantExtension:   true,
+			wantErr:         false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := bits.NewReader(tt.data)
+			asc := &aac.AudioSpecificConfig{
+				ChannelsConfiguration: tt.channelConfig,
+				ObjectTypeIndex:       tt.objectType,
+			}
+
+			pce, err := parseGASpecificConfig(r, asc)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseGASpecificConfig() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err != nil {
+				return
+			}
+
+			if asc.FrameLengthFlag != tt.wantFrameLen {
+				t.Errorf("FrameLengthFlag = %v, want %v", asc.FrameLengthFlag, tt.wantFrameLen)
+			}
+			if asc.DependsOnCoreCoder != tt.wantDependsCore {
+				t.Errorf("DependsOnCoreCoder = %v, want %v", asc.DependsOnCoreCoder, tt.wantDependsCore)
+			}
+			if asc.ExtensionFlag != tt.wantExtension {
+				t.Errorf("ExtensionFlag = %v, want %v", asc.ExtensionFlag, tt.wantExtension)
+			}
+			// PCE should be nil when channelConfig != 0
+			if tt.channelConfig != 0 && pce != nil {
+				t.Error("Expected nil PCE for channelConfig != 0")
 			}
 		})
 	}

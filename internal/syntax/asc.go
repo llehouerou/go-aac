@@ -3,6 +3,9 @@ package syntax
 
 import (
 	"errors"
+
+	"github.com/llehouerou/go-aac"
+	"github.com/llehouerou/go-aac/internal/bits"
 )
 
 // ASC parsing errors.
@@ -81,4 +84,47 @@ func isObjectTypeSupported(objType uint8) bool {
 		return false
 	}
 	return objectTypesTable[objType]
+}
+
+// parseGASpecificConfig parses the General Audio Specific Config.
+// Returns the parsed PCE if channelsConfiguration is 0, otherwise nil.
+//
+// Ported from: ~/dev/faad2/libfaad/syntax.c:109-165
+func parseGASpecificConfig(r *bits.Reader, asc *aac.AudioSpecificConfig) (*ProgramConfig, error) {
+	// 1 bit: frameLengthFlag (0 = 1024, 1 = 960)
+	asc.FrameLengthFlag = r.Get1Bit() == 1
+
+	// 1 bit: dependsOnCoreCoder
+	asc.DependsOnCoreCoder = r.Get1Bit() == 1
+	if asc.DependsOnCoreCoder {
+		// 14 bits: coreCoderDelay
+		asc.CoreCoderDelay = uint16(r.GetBits(14))
+	}
+
+	// 1 bit: extensionFlag
+	asc.ExtensionFlag = r.Get1Bit() == 1
+
+	// If channelsConfiguration == 0, parse PCE
+	var pce *ProgramConfig
+	if asc.ChannelsConfiguration == 0 {
+		var err error
+		pce, err = ParsePCE(r)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Handle extensionFlag for ER object types
+	if asc.ExtensionFlag {
+		if asc.ObjectTypeIndex >= ERObjectStart {
+			// 1 bit each: resilience flags
+			asc.AACSectionDataResilienceFlag = r.Get1Bit() == 1
+			asc.AACScalefactorDataResilienceFlag = r.Get1Bit() == 1
+			asc.AACSpectralDataResilienceFlag = r.Get1Bit() == 1
+		}
+		// 1 bit: extensionFlag3 (reserved, skip)
+		r.FlushBits(1)
+	}
+
+	return pce, nil
 }
