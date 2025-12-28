@@ -33,6 +33,9 @@ var (
 	ErrASCBitstreamError = errors.New("bitstream initialization error")
 )
 
+// SRIndexExplicit indicates an explicit 24-bit sample rate follows.
+const SRIndexExplicit = 0x0f
+
 // objectTypesTable defines which audio object types can be decoded.
 // Ported from: ~/dev/faad2/libfaad/mp4.c:40-117 (ObjectTypesTable)
 // This table assumes all optional features are enabled:
@@ -158,7 +161,7 @@ func ParseASCFromBitstream(r *bits.Reader, bufferSize uint32, shortForm bool) (*
 
 	// 4 bits: samplingFrequencyIndex
 	asc.SamplingFrequencyIndex = uint8(r.GetBits(4))
-	if asc.SamplingFrequencyIndex == 0x0f {
+	if asc.SamplingFrequencyIndex == SRIndexExplicit {
 		// 24 bits: explicit sampling frequency
 		asc.SamplingFrequency = r.GetBits(24)
 	} else {
@@ -204,7 +207,7 @@ func ParseASCFromBitstream(r *bits.Reader, bufferSize uint32, shortForm bool) (*
 		}
 		asc.SamplingFrequencyIndex = extSRIndex
 
-		if asc.SamplingFrequencyIndex == 15 {
+		if asc.SamplingFrequencyIndex == SRIndexExplicit {
 			asc.SamplingFrequency = r.GetBits(24)
 		} else {
 			asc.SamplingFrequency = tables.GetSampleRate(asc.SamplingFrequencyIndex)
@@ -242,6 +245,9 @@ func ParseASCFromBitstream(r *bits.Reader, bufferSize uint32, shortForm bool) (*
 
 	// Handle implicit SBR signaling (backward compatible extension)
 	if !shortForm {
+		// Calculate remaining bits in ASC buffer for SBR extension detection.
+		// Note: FAAD2 uses buffer_size*8 + processed - start, which appears incorrect.
+		// This implementation uses the mathematically correct formula: total - consumed.
 		bitsToDecode := int32(bufferSize*8) - int32(r.GetProcessedBits()-startPos)
 		if asc.ObjectTypeIndex != 5 && asc.ObjectTypeIndex != 29 && bitsToDecode >= 16 {
 			// Look for syncExtensionType
@@ -264,7 +270,7 @@ func ParseASCFromBitstream(r *bits.Reader, bufferSize uint32, shortForm bool) (*
 						}
 						asc.SamplingFrequencyIndex = extSRIndex
 
-						if asc.SamplingFrequencyIndex == 15 {
+						if asc.SamplingFrequencyIndex == SRIndexExplicit {
 							asc.SamplingFrequency = r.GetBits(24)
 						} else {
 							asc.SamplingFrequency = tables.GetSampleRate(asc.SamplingFrequencyIndex)

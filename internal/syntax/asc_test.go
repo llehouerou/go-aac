@@ -423,6 +423,26 @@ func TestParseASC(t *testing.T) {
 			wantChannels:   2, // Upmatrix from 1 to 2 for PS support
 			wantErr:        nil,
 		},
+		{
+			name: "ER AAC LC 44100Hz stereo",
+			// objType=17 (5 bits: 10001), srIndex=4 (4 bits: 0100), channels=2 (4 bits: 0010)
+			// GASpec: frameLenFlag=0, dependsOnCore=0, extensionFlag=0 (3 bits)
+			// epConfig=0 (2 bits)
+			// 10001 0100 0010 000 00 = 0x8A 0x10 0x00
+			data:           []byte{0x8A, 0x10, 0x00},
+			wantObjType:    17,
+			wantSRIndex:    4,
+			wantSampleRate: 44100,
+			wantChannels:   2,
+			wantErr:        nil,
+		},
+		{
+			name: "invalid channel config",
+			// objType=2, srIndex=4, channels=8 (invalid, max is 7)
+			// 00010 0100 1000 0... = 0x12 0x40
+			data:    []byte{0x12, 0x40},
+			wantErr: ErrASCInvalidChannelConfig,
+		},
 	}
 
 	for _, tt := range tests {
