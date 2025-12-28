@@ -1,4 +1,14 @@
-// Package syntax implements AAC bitstream syntax parsing.
+// internal/syntax/dse.go
+//
+// # Data Stream Element Parsing
+//
+// This file implements:
+// - ParseDataStreamElement: Parses ID_DSE elements
+//
+// Data Stream Elements carry auxiliary data that is not part of the
+// audio bitstream. This data is typically discarded during decoding.
+//
+// Ported from: ~/dev/faad2/libfaad/syntax.c:1080-1107
 package syntax
 
 import "github.com/llehouerou/go-aac/internal/bits"

@@ -1,4 +1,22 @@
 // internal/syntax/fill.go
+//
+// # Fill Element and Extension Payload Parsing
+//
+// This file implements:
+// - ParseFillElement: Parses ID_FIL elements
+// - parseExtensionPayload: Dispatches to extension-specific parsers
+// - parseDynamicRangeInfo: Parses DRC (Dynamic Range Control) data
+// - parseExcludedChannels: Parses excluded channel masks for DRC
+//
+// Fill elements can contain:
+// - EXT_DYNAMIC_RANGE (11): Dynamic Range Control data
+// - EXT_FILL_DATA (1): Filler bytes (0xA5 pattern)
+// - EXT_DATA_ELEMENT (2): Ancillary data
+// - EXT_FIL (0): Generic filler
+// - EXT_SBR_DATA (13): SBR data (handled in Phase 8)
+// - EXT_SBR_DATA_CRC (14): SBR data with CRC (handled in Phase 8)
+//
+// Ported from: ~/dev/faad2/libfaad/syntax.c:1110-1197, 2240-2394
 package syntax
 
 import "github.com/llehouerou/go-aac/internal/bits"
