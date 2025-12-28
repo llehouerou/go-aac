@@ -56,4 +56,13 @@ var (
 var (
 	// ErrPulseStartSFB indicates pulse_start_sfb exceeds num_swb.
 	ErrPulseStartSFB = errors.New("syntax: pulse_start_sfb exceeds num_swb")
+
+	// ErrPulseInShortBlock indicates pulse coding is not allowed in short blocks.
+	ErrPulseInShortBlock = errors.New("syntax: pulse coding not allowed in short blocks")
+)
+
+// Gain control errors.
+var (
+	// ErrGainControlNotSupported indicates gain control (SSR profile) is not supported.
+	ErrGainControlNotSupported = errors.New("syntax: gain control (SSR) not supported")
 )

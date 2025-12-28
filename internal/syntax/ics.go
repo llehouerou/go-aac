@@ -1,6 +1,121 @@
 // internal/syntax/ics.go
 package syntax
 
+import "github.com/llehouerou/go-aac/internal/bits"
+
+// SideInfoConfig holds configuration for side info parsing.
+type SideInfoConfig struct {
+	SFIndex      uint8
+	FrameLength  uint16
+	ObjectType   uint8
+	CommonWindow bool
+	ScalFlag     bool // True for scalable AAC
+}
+
+// ICSConfig holds configuration for ICS parsing.
+type ICSConfig struct {
+	SFIndex      uint8
+	FrameLength  uint16
+	ObjectType   uint8
+	CommonWindow bool
+	ScalFlag     bool
+}
+
+// ParseSideInfo parses side information for an ICS.
+// Ported from: side_info() in ~/dev/faad2/libfaad/syntax.c:1578-1668
+func ParseSideInfo(r *bits.Reader, ele *Element, ics *ICStream, cfg *SideInfoConfig) error {
+	// Read global gain (8 bits)
+	ics.GlobalGain = uint8(r.GetBits(8))
+
+	// Parse ics_info if not common_window and not scalable
+	if !ele.CommonWindow && !cfg.ScalFlag {
+		icsCfg := &ICSInfoConfig{
+			SFIndex:      cfg.SFIndex,
+			FrameLength:  cfg.FrameLength,
+			ObjectType:   cfg.ObjectType,
+			CommonWindow: ele.CommonWindow,
+		}
+		if err := ParseICSInfo(r, ics, icsCfg); err != nil {
+			return err
+		}
+	}
+
+	// Parse section data
+	if err := ParseSectionData(r, ics); err != nil {
+		return err
+	}
+
+	// Parse scale factor data
+	if err := ParseScaleFactorData(r, ics); err != nil {
+		return err
+	}
+
+	// Only parse tool data if not scalable
+	if !cfg.ScalFlag {
+		// Pulse data
+		ics.PulseDataPresent = r.Get1Bit() != 0
+		if ics.PulseDataPresent {
+			if err := ParsePulseData(r, ics, &ics.Pul); err != nil {
+				return err
+			}
+		}
+
+		// TNS data
+		ics.TNSDataPresent = r.Get1Bit() != 0
+		if ics.TNSDataPresent {
+			// Only parse TNS for non-ER object types
+			if cfg.ObjectType < ERObjectStart {
+				ParseTNSData(r, ics, &ics.TNS)
+			}
+		}
+
+		// Gain control data (SSR profile only)
+		ics.GainControlDataPresent = r.Get1Bit() != 0
+		if ics.GainControlDataPresent {
+			return ErrGainControlNotSupported
+		}
+	}
+
+	return nil
+}
+
+// ParseIndividualChannelStream parses a complete individual channel stream.
+// This is the main entry point for decoding one channel's data.
+//
+// Ported from: individual_channel_stream() in ~/dev/faad2/libfaad/syntax.c:1671-1728
+func ParseIndividualChannelStream(r *bits.Reader, ele *Element, ics *ICStream, specData []int16, cfg *ICSConfig) error {
+	// Parse side info (global gain, section, scale factors, tools)
+	sideCfg := &SideInfoConfig{
+		SFIndex:      cfg.SFIndex,
+		FrameLength:  cfg.FrameLength,
+		ObjectType:   cfg.ObjectType,
+		CommonWindow: cfg.CommonWindow,
+		ScalFlag:     cfg.ScalFlag,
+	}
+	if err := ParseSideInfo(r, ele, ics, sideCfg); err != nil {
+		return err
+	}
+
+	// For ER object types, TNS data is parsed here
+	if cfg.ObjectType >= ERObjectStart && ics.TNSDataPresent {
+		ParseTNSData(r, ics, &ics.TNS)
+	}
+
+	// Parse spectral data
+	if err := ParseSpectralData(r, ics, specData, cfg.FrameLength); err != nil {
+		return err
+	}
+
+	// Validate pulse not used with short blocks
+	// Note: In FAAD2, pulse_decode is called here for long blocks,
+	// but we defer that to the spectrum reconstruction phase.
+	if ics.PulseDataPresent && ics.WindowSequence == EightShortSequence {
+		return ErrPulseInShortBlock
+	}
+
+	return nil
+}
+
 // ICStream represents an Individual Channel Stream.
 // This is the core data structure for a single audio channel,
 // containing window info, section data, scale factors, and tool flags.
