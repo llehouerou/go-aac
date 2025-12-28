@@ -175,6 +175,9 @@ func ParseASCFromBitstream(r *bits.Reader, bufferSize uint32, shortForm bool) (*
 	asc.SamplingFrequencyIndex = uint8(r.GetBits(4))
 	if asc.SamplingFrequencyIndex == SRIndexExplicit {
 		// 24 bits: explicit sampling frequency
+		// Note: FAAD2 (mp4.c:147-148) reads this value but discards it, then calls
+		// get_sample_rate(0x0f) which returns 0, failing with "invalid sample rate".
+		// This implementation correctly stores the explicit sample rate.
 		asc.SamplingFrequency = r.GetBits(24)
 	} else {
 		asc.SamplingFrequency = tables.GetSampleRate(asc.SamplingFrequencyIndex)
