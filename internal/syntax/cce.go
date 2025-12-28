@@ -1,6 +1,8 @@
 // internal/syntax/cce.go
 package syntax
 
+import "github.com/llehouerou/go-aac/internal/bits"
+
 // CCEConfig holds configuration for Coupling Channel Element parsing.
 // Ported from: coupling_channel_element() parameters in ~/dev/faad2/libfaad/syntax.c:987
 type CCEConfig struct {
@@ -32,4 +34,59 @@ type CCEResult struct {
 	GainElementScale    uint8                // Scale of gain elements (0-3)
 	Element             Element              // Parsed ICS element
 	SpecData            []int16              // Spectral data (parsed but not used)
+}
+
+// parseCCEHeader parses the CCE header fields.
+// Ported from: coupling_channel_element() in ~/dev/faad2/libfaad/syntax.c:998-1034
+func parseCCEHeader(r *bits.Reader, result *CCEResult) error {
+	// Read element_instance_tag (4 bits)
+	// Ported from: syntax.c:998-999
+	result.Tag = uint8(r.GetBits(LenTag))
+
+	// Read ind_sw_cce_flag (1 bit)
+	// Ported from: syntax.c:1001-1002
+	result.IndSwCCEFlag = r.Get1Bit() != 0
+
+	// Read num_coupled_elements (3 bits)
+	// Ported from: syntax.c:1003-1004
+	result.NumCoupledElements = uint8(r.GetBits(3))
+
+	// Parse coupled element targets
+	// Ported from: syntax.c:1006-1027
+	result.NumGainElementLists = 0
+
+	for c := uint8(0); c <= result.NumCoupledElements; c++ {
+		result.NumGainElementLists++
+
+		// Read cc_target_is_cpe (1 bit)
+		result.CoupledElements[c].TargetIsCPE = r.Get1Bit() != 0
+
+		// Read cc_target_tag_select (4 bits)
+		result.CoupledElements[c].TargetTag = uint8(r.GetBits(4))
+
+		if result.CoupledElements[c].TargetIsCPE {
+			// Read cc_l and cc_r (1 bit each)
+			result.CoupledElements[c].CCL = r.Get1Bit() != 0
+			result.CoupledElements[c].CCR = r.Get1Bit() != 0
+
+			// If both channels are coupled, we need an extra gain element list
+			if result.CoupledElements[c].CCL && result.CoupledElements[c].CCR {
+				result.NumGainElementLists++
+			}
+		}
+	}
+
+	// Read cc_domain (1 bit)
+	// Ported from: syntax.c:1029-1030
+	result.CCDomain = r.Get1Bit() != 0
+
+	// Read gain_element_sign (1 bit)
+	// Ported from: syntax.c:1031-1032
+	result.GainElementSign = r.Get1Bit() != 0
+
+	// Read gain_element_scale (2 bits)
+	// Ported from: syntax.c:1033-1034
+	result.GainElementScale = uint8(r.GetBits(2))
+
+	return nil
 }
