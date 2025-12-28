@@ -3,6 +3,8 @@ package syntax
 
 import (
 	"testing"
+
+	"github.com/llehouerou/go-aac/internal/bits"
 )
 
 func TestParseSingleChannelElement_ElementTag(t *testing.T) {
@@ -92,4 +94,12 @@ func TestParseSingleChannelElement_ISNotAllowed(t *testing.T) {
 			t.Error("ErrIntensityStereoInSCE should be defined")
 		}
 	}
+}
+
+func TestParseLFEElement_HasCorrectSignature(t *testing.T) {
+	// Verify ParseLFEElement has the same signature as ParseSingleChannelElement
+	// This compile-time check ensures the alias function matches the expected interface
+	type parserFunc func(*bits.Reader, uint8, *SCEConfig) (*SCEResult, error)
+	var _ parserFunc = ParseLFEElement
+	var _ parserFunc = ParseSingleChannelElement
 }

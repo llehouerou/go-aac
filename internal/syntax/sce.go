@@ -72,3 +72,14 @@ func ParseSingleChannelElement(r *bits.Reader, channel uint8, cfg *SCEConfig) (*
 
 	return result, nil
 }
+
+// ParseLFEElement parses a Low Frequency Effects (LFE) element.
+// LFE uses the same syntax as SCE, so this is an alias for ParseSingleChannelElement.
+//
+// The LFE channel is typically the ".1" in configurations like 5.1 surround.
+// It carries bass frequencies (typically below 120 Hz) for the subwoofer.
+//
+// Ported from: single_lfe_channel_element() in ~/dev/faad2/libfaad/syntax.c:652-696
+func ParseLFEElement(r *bits.Reader, channel uint8, cfg *SCEConfig) (*SCEResult, error) {
+	return ParseSingleChannelElement(r, channel, cfg)
+}
