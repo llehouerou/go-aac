@@ -81,3 +81,11 @@ var (
 	// FAAD2 error code: 32
 	ErrMSMaskReserved = errors.New("syntax: ms_mask_present value 3 is reserved")
 )
+
+// CCE errors.
+var (
+	// ErrIntensityStereoInCCE indicates intensity stereo was used in a coupling channel element.
+	// Intensity stereo is not valid in CCE.
+	// FAAD2 error code: 32
+	ErrIntensityStereoInCCE = errors.New("syntax: intensity stereo not allowed in coupling channel element")
+)
