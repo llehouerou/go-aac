@@ -6,6 +6,7 @@ import (
 
 	"github.com/llehouerou/go-aac"
 	"github.com/llehouerou/go-aac/internal/bits"
+	"github.com/llehouerou/go-aac/internal/tables"
 )
 
 // ASC parsing errors.
@@ -129,4 +130,160 @@ func parseGASpecificConfig(r *bits.Reader, asc *aac.AudioSpecificConfig) (*Progr
 	}
 
 	return pce, nil
+}
+
+// ParseASC parses an AudioSpecificConfig from raw bytes.
+// Returns the parsed config, optional PCE, and any error.
+//
+// Ported from: ~/dev/faad2/libfaad/mp4.c:299-313 (AudioSpecificConfig2)
+func ParseASC(data []byte) (*aac.AudioSpecificConfig, *ProgramConfig, error) {
+	r := bits.NewReader(data)
+	if r.Error() {
+		return nil, nil, ErrASCBitstreamError
+	}
+	return ParseASCFromBitstream(r, uint32(len(data)), false)
+}
+
+// ParseASCFromBitstream parses an AudioSpecificConfig from a bitstream.
+// bufferSize is the total size available.
+// shortForm disables SBR extension parsing when true.
+//
+// Ported from: ~/dev/faad2/libfaad/mp4.c:127-297 (AudioSpecificConfigFromBitfile)
+func ParseASCFromBitstream(r *bits.Reader, bufferSize uint32, shortForm bool) (*aac.AudioSpecificConfig, *ProgramConfig, error) {
+	asc := &aac.AudioSpecificConfig{}
+	startPos := r.GetProcessedBits()
+
+	// 5 bits: objectTypeIndex
+	asc.ObjectTypeIndex = uint8(r.GetBits(5))
+
+	// 4 bits: samplingFrequencyIndex
+	asc.SamplingFrequencyIndex = uint8(r.GetBits(4))
+	if asc.SamplingFrequencyIndex == 0x0f {
+		// 24 bits: explicit sampling frequency
+		asc.SamplingFrequency = r.GetBits(24)
+	} else {
+		asc.SamplingFrequency = tables.GetSampleRate(asc.SamplingFrequencyIndex)
+	}
+
+	// 4 bits: channelsConfiguration
+	asc.ChannelsConfiguration = uint8(r.GetBits(4))
+
+	// Validate object type
+	if !isObjectTypeSupported(asc.ObjectTypeIndex) {
+		return nil, nil, ErrASCUnsupportedObjectType
+	}
+
+	// Validate sample rate
+	if asc.SamplingFrequency == 0 {
+		return nil, nil, ErrASCInvalidSampleRate
+	}
+
+	// Validate channel config
+	if asc.ChannelsConfiguration > 7 {
+		return nil, nil, ErrASCInvalidChannelConfig
+	}
+
+	// Upmatrix mono to stereo for implicit PS signaling
+	if asc.ChannelsConfiguration == 1 {
+		asc.ChannelsConfiguration = 2
+	}
+
+	// Initialize SBR present flag to unknown (-1)
+	asc.SBRPresentFlag = -1
+
+	// Handle explicit SBR signaling (object types 5 and 29)
+	if asc.ObjectTypeIndex == 5 || asc.ObjectTypeIndex == 29 {
+		asc.SBRPresentFlag = 1
+
+		// 4 bits: extensionSamplingFrequencyIndex
+		extSRIndex := uint8(r.GetBits(4))
+
+		// Check for downsampled SBR
+		if extSRIndex == asc.SamplingFrequencyIndex {
+			asc.DownSampledSBR = true
+		}
+		asc.SamplingFrequencyIndex = extSRIndex
+
+		if asc.SamplingFrequencyIndex == 15 {
+			asc.SamplingFrequency = r.GetBits(24)
+		} else {
+			asc.SamplingFrequency = tables.GetSampleRate(asc.SamplingFrequencyIndex)
+		}
+
+		// 5 bits: new objectTypeIndex (the core codec type)
+		asc.ObjectTypeIndex = uint8(r.GetBits(5))
+	}
+
+	// Parse GASpecificConfig for appropriate object types
+	var pce *ProgramConfig
+	var err error
+	switch asc.ObjectTypeIndex {
+	case 1, 2, 3, 4, 6, 7: // Main, LC, SSR, LTP, Scalable, TwinVQ
+		pce, err = parseGASpecificConfig(r, asc)
+		if err != nil {
+			return nil, nil, ErrASCGAConfigFailed
+		}
+	default:
+		if asc.ObjectTypeIndex >= ERObjectStart {
+			// ER object types
+			pce, err = parseGASpecificConfig(r, asc)
+			if err != nil {
+				return nil, nil, ErrASCGAConfigFailed
+			}
+			// 2 bits: epConfig
+			asc.EPConfig = uint8(r.GetBits(2))
+			if asc.EPConfig != 0 {
+				return nil, nil, ErrASCEPConfigNotSupported
+			}
+		} else {
+			return nil, nil, ErrASCUnsupportedObjectType
+		}
+	}
+
+	// Handle implicit SBR signaling (backward compatible extension)
+	if !shortForm {
+		bitsToDecose := int32(bufferSize*8) - int32(r.GetProcessedBits()-startPos)
+		if asc.ObjectTypeIndex != 5 && asc.ObjectTypeIndex != 29 && bitsToDecose >= 16 {
+			// Look for syncExtensionType
+			syncExtType := r.GetBits(11)
+			if syncExtType == 0x2b7 {
+				// 5 bits: extensionAudioObjectType
+				extOTi := uint8(r.GetBits(5))
+				if extOTi == 5 {
+					// 1 bit: sbrPresentFlag
+					asc.SBRPresentFlag = int8(r.Get1Bit())
+					if asc.SBRPresentFlag == 1 {
+						asc.ObjectTypeIndex = extOTi
+
+						// 4 bits: extensionSamplingFrequencyIndex
+						extSRIndex := uint8(r.GetBits(4))
+
+						// Check for downsampled SBR
+						if extSRIndex == asc.SamplingFrequencyIndex {
+							asc.DownSampledSBR = true
+						}
+						asc.SamplingFrequencyIndex = extSRIndex
+
+						if asc.SamplingFrequencyIndex == 15 {
+							asc.SamplingFrequency = r.GetBits(24)
+						} else {
+							asc.SamplingFrequency = tables.GetSampleRate(asc.SamplingFrequencyIndex)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Handle implicit SBR based on sample rate
+	if asc.SBRPresentFlag == -1 {
+		if asc.SamplingFrequency <= 24000 {
+			asc.SamplingFrequency *= 2
+			asc.ForceUpSampling = true
+		} else {
+			asc.DownSampledSBR = true
+		}
+	}
+
+	return asc, pce, nil
 }

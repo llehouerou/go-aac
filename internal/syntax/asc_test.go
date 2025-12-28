@@ -1,6 +1,7 @@
 package syntax
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -368,5 +369,90 @@ func TestParseGASpecificConfigERResilienceFlags(t *testing.T) {
 	}
 	if !asc.AACSpectralDataResilienceFlag {
 		t.Error("AACSpectralDataResilienceFlag = false, want true")
+	}
+}
+
+func TestParseASC(t *testing.T) {
+	tests := []struct {
+		name           string
+		data           []byte
+		wantObjType    uint8
+		wantSRIndex    uint8
+		wantSampleRate uint32
+		wantChannels   uint8
+		wantErr        error
+	}{
+		{
+			name: "AAC-LC 44100Hz stereo",
+			// 0x12 0x10 = 0001 0010 0001 0000
+			// objType=2 (5 bits: 00010), srIndex=4 (4 bits: 0100), channels=2 (4 bits: 0010), GASpec...
+			data:           []byte{0x12, 0x10},
+			wantObjType:    2,
+			wantSRIndex:    4,
+			wantSampleRate: 44100,
+			wantChannels:   2,
+			wantErr:        nil,
+		},
+		{
+			name: "AAC-LC 48000Hz stereo",
+			// objType=2, srIndex=3, channels=2
+			// 00010 0011 0010 0... = 0x11 0x90
+			data:           []byte{0x11, 0x90},
+			wantObjType:    2,
+			wantSRIndex:    3,
+			wantSampleRate: 48000,
+			wantChannels:   2,
+			wantErr:        nil,
+		},
+		{
+			name: "unsupported object type (SSR)",
+			// objType=3 (SSR), srIndex=4, channels=2
+			// 00011 0100 0010 = 0x1A 0x10
+			data:        []byte{0x1A, 0x10},
+			wantObjType: 3,
+			wantErr:     ErrASCUnsupportedObjectType,
+		},
+		{
+			name: "AAC-LC mono (upmatrix to stereo)",
+			// objType=2, srIndex=4, channels=1
+			// 00010 0100 0001 0... = 0x12 0x08
+			data:           []byte{0x12, 0x08},
+			wantObjType:    2,
+			wantSRIndex:    4,
+			wantSampleRate: 44100,
+			wantChannels:   2, // Upmatrix from 1 to 2 for PS support
+			wantErr:        nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			asc, _, err := ParseASC(tt.data)
+
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Errorf("ParseASC() error = %v, wantErr %v", err, tt.wantErr)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("ParseASC() unexpected error = %v", err)
+				return
+			}
+
+			if asc.ObjectTypeIndex != tt.wantObjType {
+				t.Errorf("ObjectTypeIndex = %d, want %d", asc.ObjectTypeIndex, tt.wantObjType)
+			}
+			if asc.SamplingFrequencyIndex != tt.wantSRIndex {
+				t.Errorf("SamplingFrequencyIndex = %d, want %d", asc.SamplingFrequencyIndex, tt.wantSRIndex)
+			}
+			if asc.SamplingFrequency != tt.wantSampleRate {
+				t.Errorf("SamplingFrequency = %d, want %d", asc.SamplingFrequency, tt.wantSampleRate)
+			}
+			if asc.ChannelsConfiguration != tt.wantChannels {
+				t.Errorf("ChannelsConfiguration = %d, want %d", asc.ChannelsConfiguration, tt.wantChannels)
+			}
+		})
 	}
 }
