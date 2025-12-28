@@ -147,6 +147,18 @@ func ParseASC(data []byte) (*aac.AudioSpecificConfig, *ProgramConfig, error) {
 	return ParseASCFromBitstream(r, uint32(len(data)), false)
 }
 
+// ParseASCShortForm parses an AudioSpecificConfig without SBR extension detection.
+// Use this when you know there's no SBR extension data in the config.
+//
+// Ported from: ~/dev/faad2/libfaad/mp4.c short_form parameter
+func ParseASCShortForm(data []byte) (*aac.AudioSpecificConfig, *ProgramConfig, error) {
+	r := bits.NewReader(data)
+	if r.Error() {
+		return nil, nil, ErrASCBitstreamError
+	}
+	return ParseASCFromBitstream(r, uint32(len(data)), true)
+}
+
 // ParseASCFromBitstream parses an AudioSpecificConfig from a bitstream.
 // bufferSize is the total size available.
 // shortForm disables SBR extension parsing when true.

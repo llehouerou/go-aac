@@ -476,3 +476,32 @@ func TestParseASC(t *testing.T) {
 		})
 	}
 }
+
+func TestParseASCShortForm(t *testing.T) {
+	// AAC-LC 44100Hz stereo - shortForm skips SBR extension parsing
+	data := []byte{0x12, 0x10}
+
+	asc, _, err := ParseASCShortForm(data)
+	if err != nil {
+		t.Fatalf("ParseASCShortForm() error = %v", err)
+	}
+
+	// With short form, SBR remains unknown so implicit heuristics apply
+	// 44100 > 24000, so downSampledSBR should be set
+	if !asc.DownSampledSBR {
+		t.Error("DownSampledSBR should be true for sr > 24000 with unknown SBR")
+	}
+
+	// Sample rate stays at 44100 (no doubling because > 24000)
+	if asc.SamplingFrequency != 44100 {
+		t.Errorf("SamplingFrequency = %d, want 44100", asc.SamplingFrequency)
+	}
+
+	// Verify basic parsing still works
+	if asc.ObjectTypeIndex != 2 {
+		t.Errorf("ObjectTypeIndex = %d, want 2", asc.ObjectTypeIndex)
+	}
+	if asc.ChannelsConfiguration != 2 {
+		t.Errorf("ChannelsConfiguration = %d, want 2", asc.ChannelsConfiguration)
+	}
+}
