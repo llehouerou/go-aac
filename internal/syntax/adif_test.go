@@ -361,3 +361,55 @@ func TestADIFHeader_PCEs(t *testing.T) {
 	// Each PCE should be a ProgramConfig
 	h.PCE[0].Channels = 2
 }
+
+func TestCheckADIFMagic_Valid(t *testing.T) {
+	data := []byte{'A', 'D', 'I', 'F', 0x00, 0x00, 0x00, 0x00}
+	r := bits.NewReader(data)
+	if !CheckADIFMagic(r) {
+		t.Error("CheckADIFMagic should return true for valid ADIF magic")
+	}
+}
+
+func TestCheckADIFMagic_Invalid(t *testing.T) {
+	data := []byte{0xFF, 0xF1, 0x50, 0x80} // ADTS syncword
+	r := bits.NewReader(data)
+	if CheckADIFMagic(r) {
+		t.Error("CheckADIFMagic should return false for non-ADIF data")
+	}
+}
+
+func TestCheckADIFMagic_Short(t *testing.T) {
+	data := []byte{'A', 'D', 'I'} // Too short
+	r := bits.NewReader(data)
+	if CheckADIFMagic(r) {
+		t.Error("CheckADIFMagic should return false for short data")
+	}
+}
+
+func TestCheckADIFMagic_ConsumesBytes(t *testing.T) {
+	// When magic is found, bytes should be consumed
+	data := []byte{'A', 'D', 'I', 'F', 0xAB, 0xCD}
+	r := bits.NewReader(data)
+	if !CheckADIFMagic(r) {
+		t.Fatal("CheckADIFMagic should return true for valid ADIF magic")
+	}
+	// After consuming "ADIF", next byte should be 0xAB
+	nextByte := r.GetBits(8)
+	if nextByte != 0xAB {
+		t.Errorf("After consuming magic, expected 0xAB, got 0x%02X", nextByte)
+	}
+}
+
+func TestCheckADIFMagic_DoesNotConsumeOnMismatch(t *testing.T) {
+	// When magic is NOT found, bytes should NOT be consumed
+	data := []byte{0xFF, 0xF1, 0x50, 0x80} // ADTS syncword
+	r := bits.NewReader(data)
+	if CheckADIFMagic(r) {
+		t.Fatal("CheckADIFMagic should return false for non-ADIF data")
+	}
+	// Bytes should not be consumed; next read should still get 0xFF
+	nextByte := r.GetBits(8)
+	if nextByte != 0xFF {
+		t.Errorf("After failed check, expected 0xFF (not consumed), got 0x%02X", nextByte)
+	}
+}

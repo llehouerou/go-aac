@@ -10,6 +10,25 @@ import (
 // ADIFMagic is the 4-byte magic number for ADIF files.
 var ADIFMagic = [4]byte{'A', 'D', 'I', 'F'}
 
+// CheckADIFMagic checks if the next 4 bytes are "ADIF" and consumes them if so.
+// Returns true if magic was found (and consumed), false otherwise.
+// Does not consume bytes if magic is not found.
+//
+// Used to detect ADIF format vs ADTS when initializing decoder.
+func CheckADIFMagic(r *bits.Reader) bool {
+	// Peek 32 bits
+	magic := r.ShowBits(32)
+
+	// Check for "ADIF" in big-endian order
+	expected := uint32('A')<<24 | uint32('D')<<16 | uint32('I')<<8 | uint32('F')
+
+	if magic == expected {
+		r.FlushBits(32) // Consume the magic bytes
+		return true
+	}
+	return false
+}
+
 // ErrADIFBitstream is returned when a bitstream error occurs during ADIF parsing.
 var ErrADIFBitstream = errors.New("ADIF bitstream error")
 
