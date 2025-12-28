@@ -4,7 +4,7 @@ package syntax
 import "github.com/llehouerou/go-aac/internal/bits"
 
 // SCEConfig holds configuration for Single Channel Element parsing.
-// Ported from: single_lfe_channel_element() parameters in ~/dev/faad2/libfaad/syntax.c:1060
+// Ported from: single_lfe_channel_element() parameters in ~/dev/faad2/libfaad/syntax.c:652
 type SCEConfig struct {
 	SFIndex     uint8  // Sample rate index (0-11)
 	FrameLength uint16 // Frame length (960 or 1024)
@@ -12,7 +12,7 @@ type SCEConfig struct {
 }
 
 // SCEResult holds the result of parsing a Single Channel Element.
-// Ported from: single_lfe_channel_element() return values in ~/dev/faad2/libfaad/syntax.c:1060-1095
+// Ported from: single_lfe_channel_element() return values in ~/dev/faad2/libfaad/syntax.c:652-696
 type SCEResult struct {
 	Element  Element // Parsed element data
 	SpecData []int16 // Spectral coefficients (1024 or 960 values)
