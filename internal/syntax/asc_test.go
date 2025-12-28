@@ -79,6 +79,7 @@ func TestParseGASpecificConfig(t *testing.T) {
 		objectType      uint8
 		wantFrameLen    bool
 		wantDependsCore bool
+		wantCoreDelay   uint16
 		wantExtension   bool
 		wantErr         bool
 	}{
@@ -89,6 +90,7 @@ func TestParseGASpecificConfig(t *testing.T) {
 			objectType:      2, // LC
 			wantFrameLen:    false,
 			wantDependsCore: false,
+			wantCoreDelay:   0,
 			wantExtension:   false,
 			wantErr:         false,
 		},
@@ -99,16 +101,18 @@ func TestParseGASpecificConfig(t *testing.T) {
 			objectType:      2,
 			wantFrameLen:    true,
 			wantDependsCore: false,
+			wantCoreDelay:   0,
 			wantExtension:   false,
 			wantErr:         false,
 		},
 		{
 			name:            "depends on core coder",
-			data:            []byte{0x40, 0x10, 0x00}, // 0b01000000 0b00010000 0b00000000: frameLenFlag=0, dependsOnCore=1, coreCoderDelay=256, extensionFlag=0
+			data:            []byte{0x40, 0x10, 0x00}, // 0b01000000 0b00010000 0b00000000: frameLenFlag=0, dependsOnCore=1, coreCoderDelay=16, extensionFlag=0
 			channelConfig:   2,
 			objectType:      2,
 			wantFrameLen:    false,
 			wantDependsCore: true,
+			wantCoreDelay:   16,
 			wantExtension:   false,
 			wantErr:         false,
 		},
@@ -119,6 +123,7 @@ func TestParseGASpecificConfig(t *testing.T) {
 			objectType:      2, // LC (not ER)
 			wantFrameLen:    false,
 			wantDependsCore: false,
+			wantCoreDelay:   0,
 			wantExtension:   true,
 			wantErr:         false,
 		},
@@ -129,6 +134,7 @@ func TestParseGASpecificConfig(t *testing.T) {
 			objectType:      17, // ER AAC LC
 			wantFrameLen:    false,
 			wantDependsCore: false,
+			wantCoreDelay:   0,
 			wantExtension:   true,
 			wantErr:         false,
 		},
@@ -165,6 +171,7 @@ func TestParseGASpecificConfig(t *testing.T) {
 			objectType:      2, // LC
 			wantFrameLen:    false,
 			wantDependsCore: false,
+			wantCoreDelay:   0,
 			wantExtension:   false,
 			wantErr:         false,
 		},
@@ -192,6 +199,9 @@ func TestParseGASpecificConfig(t *testing.T) {
 			}
 			if asc.DependsOnCoreCoder != tt.wantDependsCore {
 				t.Errorf("DependsOnCoreCoder = %v, want %v", asc.DependsOnCoreCoder, tt.wantDependsCore)
+			}
+			if asc.CoreCoderDelay != tt.wantCoreDelay {
+				t.Errorf("CoreCoderDelay = %d, want %d", asc.CoreCoderDelay, tt.wantCoreDelay)
 			}
 			if asc.ExtensionFlag != tt.wantExtension {
 				t.Errorf("ExtensionFlag = %v, want %v", asc.ExtensionFlag, tt.wantExtension)

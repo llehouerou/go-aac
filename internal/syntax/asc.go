@@ -92,6 +92,8 @@ func isObjectTypeSupported(objType uint8) bool {
 // Ported from: ~/dev/faad2/libfaad/syntax.c:109-165
 func parseGASpecificConfig(r *bits.Reader, asc *aac.AudioSpecificConfig) (*ProgramConfig, error) {
 	// 1 bit: frameLengthFlag (0 = 1024, 1 = 960)
+	// Note: FAAD2 conditionally rejects frameLengthFlag=1 unless ALLOW_SMALL_FRAMELENGTH
+	// is defined. This implementation allows both frame lengths for flexibility.
 	asc.FrameLengthFlag = r.Get1Bit() == 1
 
 	// 1 bit: dependsOnCoreCoder
