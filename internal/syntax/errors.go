@@ -45,3 +45,9 @@ var (
 	// ErrSectionCoverage indicates sections do not cover all SFBs.
 	ErrSectionCoverage = errors.New("syntax: sections do not cover all SFBs")
 )
+
+// Scale factor errors.
+var (
+	// ErrScaleFactorRange indicates a scale factor is out of the valid range [0, 255].
+	ErrScaleFactorRange = errors.New("syntax: scale factor out of range [0, 255]")
+)
