@@ -94,6 +94,61 @@ func parseCCEHeader(r *bits.Reader, result *CCEResult) error {
 	return nil
 }
 
+// ParseCouplingChannelElement parses a Coupling Channel Element (CCE).
+// CCE allows coupling channels to share gain information with target channels.
+//
+// This function:
+// 1. Parses the CCE header (tag, coupled elements, domain flags)
+// 2. Parses the individual channel stream
+// 3. Validates that intensity stereo is not used (illegal in CCE)
+// 4. Parses gain element lists
+//
+// Note: CCE data is parsed but discarded (rarely used in practice).
+// Ported from: coupling_channel_element() in ~/dev/faad2/libfaad/syntax.c:987-1076
+func ParseCouplingChannelElement(r *bits.Reader, cfg *CCEConfig) (*CCEResult, error) {
+	result := &CCEResult{
+		SpecData: make([]int16, cfg.FrameLength),
+	}
+
+	// Initialize element
+	result.Element.PairedChannel = -1 // No paired channel for CCE
+	result.Element.CommonWindow = false
+
+	// Parse CCE header
+	// Ported from: syntax.c:998-1034
+	if err := parseCCEHeader(r, result); err != nil {
+		return nil, err
+	}
+
+	// Parse individual channel stream
+	// Ported from: syntax.c:1036-1040
+	icsCfg := &ICSConfig{
+		SFIndex:      cfg.SFIndex,
+		FrameLength:  cfg.FrameLength,
+		ObjectType:   cfg.ObjectType,
+		CommonWindow: false,
+		ScalFlag:     false,
+	}
+
+	if err := ParseIndividualChannelStream(r, &result.Element, &result.Element.ICS1, result.SpecData, icsCfg); err != nil {
+		return nil, err
+	}
+
+	// Intensity stereo is not allowed in coupling channel elements
+	// Ported from: syntax.c:1042-1044
+	if result.Element.ICS1.IsUsed {
+		return nil, ErrIntensityStereoInCCE
+	}
+
+	// Parse gain element lists
+	// Ported from: syntax.c:1046-1073
+	if err := parseCCEGainElements(r, result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 // parseCCEGainElements parses the gain element lists for CCE.
 // Ported from: coupling_channel_element() in ~/dev/faad2/libfaad/syntax.c:1046-1073
 func parseCCEGainElements(r *bits.Reader, result *CCEResult) error {
