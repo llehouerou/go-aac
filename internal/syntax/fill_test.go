@@ -330,3 +330,81 @@ func TestParseExtensionPayload_DataElement(t *testing.T) {
 		t.Errorf("bytesRead = %d, want 7", bytesRead)
 	}
 }
+
+func TestParseFillElement_Empty(t *testing.T) {
+	// count = 0, no payload
+	// count: 4 bits = 0000
+
+	data := []byte{0x00}
+	r := bits.NewReader(data)
+	drc := &DRCInfo{}
+
+	err := ParseFillElement(r, drc)
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestParseFillElement_SmallCount(t *testing.T) {
+	// count = 3 (small, no extension)
+	// count: 4 bits = 0011
+	// Followed by 3 bytes of extension_payload (EXT_FIL with fill data)
+
+	data := []byte{0x30, 0x0F, 0xFF}
+	r := bits.NewReader(data)
+	drc := &DRCInfo{}
+
+	err := ParseFillElement(r, drc)
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestParseFillElement_ExtendedCount(t *testing.T) {
+	// count = 15 (triggers extended count)
+	// count: 4 bits = 1111 (15)
+	// extra_count: 8 bits = 5 (total = 15 + 5 - 1 = 19 bytes)
+	// Followed by 19 bytes of extension_payload
+
+	data := make([]byte, 25)
+	data[0] = 0xF0 // count=15
+	data[1] = 0x50 // extra=5, ext_type=0 start
+	data[2] = 0x00 // ext_type=0 end, fill_nibble
+	// Rest are fill bytes
+
+	r := bits.NewReader(data)
+	drc := &DRCInfo{}
+
+	err := ParseFillElement(r, drc)
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestParseFillElement_WithDRC(t *testing.T) {
+	// Fill element containing DRC extension
+	// count: 4 bits = 3
+	// ext_type: 4 bits = 1011 (EXT_DYNAMIC_RANGE = 11)
+	// dynamic_range_info (minimal: 2 bytes consumed)
+
+	data := []byte{0x3B, 0x05, 0x50}
+	r := bits.NewReader(data)
+	drc := &DRCInfo{}
+
+	err := ParseFillElement(r, drc)
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if !drc.Present {
+		t.Error("drc.Present should be true")
+	}
+
+	if drc.DynRngCtl[0] != 0x55 {
+		t.Errorf("DynRngCtl[0] = %d, want 85", drc.DynRngCtl[0])
+	}
+}

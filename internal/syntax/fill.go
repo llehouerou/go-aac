@@ -96,6 +96,69 @@ func parseDynamicRangeInfo(r *bits.Reader, drc *DRCInfo) uint8 {
 	return n
 }
 
+// FillConfig holds configuration for Fill Element parsing.
+// Currently empty, but structured for future SBR support.
+type FillConfig struct {
+	// SBRElement specifies which SBR element to associate with.
+	// Set to InvalidSBRElement (255) if no SBR association.
+	SBRElement uint8
+}
+
+// ParseFillElement parses a Fill Element (ID_FIL).
+// Fill elements contain extension payloads including DRC and SBR data.
+//
+// For now, SBR data is skipped. SBR support is implemented in Phase 8.
+//
+// Ported from: fill_element() in ~/dev/faad2/libfaad/syntax.c:1110-1197
+func ParseFillElement(r *bits.Reader, drc *DRCInfo) error {
+	return ParseFillElementWithConfig(r, drc, &FillConfig{SBRElement: InvalidSBRElement})
+}
+
+// ParseFillElementWithConfig parses a Fill Element with explicit configuration.
+// This variant allows specifying SBR element association for future SBR support.
+//
+// Ported from: fill_element() in ~/dev/faad2/libfaad/syntax.c:1110-1197
+func ParseFillElementWithConfig(r *bits.Reader, drc *DRCInfo, cfg *FillConfig) error {
+	_ = cfg // Unused for now, will be used for SBR in Phase 8
+
+	// count (4 bits)
+	count := uint16(r.GetBits(4))
+
+	// If count == 15, read extended count
+	if count == 15 {
+		count += uint16(r.GetBits(8)) - 1
+	}
+
+	if count == 0 {
+		return nil
+	}
+
+	// Check for SBR extension (Phase 8)
+	// For now, just peek and skip SBR data
+	bsExtensionType := ExtensionType(r.ShowBits(4))
+
+	if bsExtensionType == ExtSBRData || bsExtensionType == ExtSBRDataCRC {
+		// SBR data - skip for now (Phase 8 implementation)
+		// Just consume all the count bytes
+		for i := uint16(0); i < count; i++ {
+			r.GetBits(8)
+		}
+		return nil
+	}
+
+	// Parse extension payloads until count is exhausted
+	for count > 0 {
+		payloadBytes := parseExtensionPayload(r, drc, count)
+		if payloadBytes <= count {
+			count -= payloadBytes
+		} else {
+			count = 0
+		}
+	}
+
+	return nil
+}
+
 // parseExtensionPayload parses an extension_payload() element.
 // Returns the number of payload bytes consumed.
 //
