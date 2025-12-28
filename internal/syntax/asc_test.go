@@ -1,6 +1,7 @@
 package syntax
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -58,7 +59,7 @@ func TestIsObjectTypeSupportedOutOfRange(t *testing.T) {
 	// Object types >= 32 should return false
 	tests := []uint8{32, 33, 64, 100, 255}
 	for _, objType := range tests {
-		t.Run("type_"+string(rune('0'+objType/100))+string(rune('0'+(objType/10)%10))+string(rune('0'+objType%10)), func(t *testing.T) {
+		t.Run(fmt.Sprintf("type_%d", objType), func(t *testing.T) {
 			got := isObjectTypeSupported(objType)
 			if got {
 				t.Errorf("isObjectTypeSupported(%d) = true, want false for out-of-range type", objType)

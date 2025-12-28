@@ -33,6 +33,12 @@ var (
 // Ported from: ~/dev/faad2/libfaad/mp4.c:40-117 (ObjectTypesTable)
 // This table assumes all optional features are enabled:
 // MAIN_DEC, LTP_DEC, SBR_DEC, ERROR_RESILIENCE, LD_DEC, PS_DEC
+//
+// Note: This table is specifically for ASC (AudioSpecificConfig) parsing.
+// A separate CanDecodeOT() function exists in tables/sample_rates.go (from common.c)
+// for runtime object type validation. The apparent discrepancy at index 27 is
+// intentional: MPEG-4 defines index 27 as "ER Parametric" (not supported here),
+// but DRM mode uses index 27 for "DRM ER LC" (supported via CanDecodeOT).
 var objectTypesTable = [32]bool{
 	false, // 0: NULL
 	true,  // 1: AAC Main
