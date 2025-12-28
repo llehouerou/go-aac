@@ -120,6 +120,9 @@ func ParseCouplingChannelElement(r *bits.Reader, cfg *CCEConfig) (*CCEResult, er
 		return nil, err
 	}
 
+	// Set Element.ElementInstanceTag for consistency with SCE/CPE parsers
+	result.Element.ElementInstanceTag = result.Tag
+
 	// Parse individual channel stream
 	// Ported from: syntax.c:1036-1040
 	icsCfg := &ICSConfig{
