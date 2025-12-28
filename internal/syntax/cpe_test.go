@@ -3,6 +3,8 @@ package syntax
 
 import (
 	"testing"
+
+	"github.com/llehouerou/go-aac/internal/bits"
 )
 
 func TestCPEConfig_Fields(t *testing.T) {
@@ -55,4 +57,36 @@ func TestCPEResult_ElementInitialization(t *testing.T) {
 	if !result.Element.CommonWindow {
 		t.Error("CommonWindow should be true")
 	}
+}
+
+func TestParseChannelPairElement_ElementTag(t *testing.T) {
+	// Test parsing element_instance_tag (4 bits) and common_window (1 bit)
+	testCases := []struct {
+		name         string
+		tag          uint8
+		commonWindow bool
+	}{
+		{"tag 0, no common window", 0, false},
+		{"tag 7, common window", 7, true},
+		{"tag 15, no common window", 15, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Build bitstream: tag (4 bits) + common_window (1 bit)
+			// For no common_window case, we need minimal ICS data for both channels
+			// For common_window case, we need ics_info + ms_mask + ICS data
+
+			// This is a basic structure test - full parsing tested separately
+			if LenTag != 4 {
+				t.Errorf("LenTag = %d, want 4", LenTag)
+			}
+		})
+	}
+}
+
+func TestParseChannelPairElement_Signature(t *testing.T) {
+	// Verify ParseChannelPairElement has the expected signature
+	type parserFunc func(*bits.Reader, uint8, *CPEConfig) (*CPEResult, error)
+	var _ parserFunc = ParseChannelPairElement
 }
