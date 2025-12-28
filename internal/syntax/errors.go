@@ -27,3 +27,21 @@ var (
 	// ErrLTPLagTooLarge indicates LTP lag exceeds 2 * frame_length.
 	ErrLTPLagTooLarge = errors.New("syntax: LTP lag exceeds maximum")
 )
+
+// Section data errors.
+var (
+	// ErrBitstreamRead indicates a bitstream read error occurred.
+	ErrBitstreamRead = errors.New("syntax: bitstream read error")
+
+	// ErrSectionLimit indicates the section limit was exceeded.
+	ErrSectionLimit = errors.New("syntax: section limit exceeded")
+
+	// ErrReservedCodebook indicates reserved codebook 12 was used.
+	ErrReservedCodebook = errors.New("syntax: reserved codebook 12 used")
+
+	// ErrSectionLength indicates the section length exceeds the limit.
+	ErrSectionLength = errors.New("syntax: section length exceeds limit")
+
+	// ErrSectionCoverage indicates sections do not cover all SFBs.
+	ErrSectionCoverage = errors.New("syntax: sections do not cover all SFBs")
+)
