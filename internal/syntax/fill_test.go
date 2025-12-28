@@ -75,3 +75,171 @@ func TestParseExcludedChannels_Extended(t *testing.T) {
 		t.Errorf("AdditionalExcludedChns[1] = %d, want 0", drc.AdditionalExcludedChns[1])
 	}
 }
+
+func TestParseDynamicRangeInfo_Minimal(t *testing.T) {
+	// Minimal DRC info:
+	// - has_instance_tag: 1 bit = 0 (no instance tag)
+	// - excluded_chns_present: 1 bit = 0 (no excluded channels)
+	// - has_bands_data: 1 bit = 0 (no band data, single band)
+	// - has_prog_ref_level: 1 bit = 0 (no program reference level)
+	// - dyn_rng_sgn[0]: 1 bit = 0
+	// - dyn_rng_ctl[0]: 7 bits = 0x55 (85)
+	//
+	// Binary: 0 0 0 0 0 1010101
+	// Byte 0: 0000_0101 = 0x05
+	// Byte 1: 0101_xxxx = 0x50
+	//
+	// n starts at 1, then +1 for single band dyn_rng = 2
+
+	data := []byte{0x05, 0x50}
+	r := bits.NewReader(data)
+	drc := &DRCInfo{}
+
+	bytesRead := parseDynamicRangeInfo(r, drc)
+
+	if bytesRead != 2 {
+		t.Errorf("bytesRead = %d, want 2", bytesRead)
+	}
+
+	if drc.NumBands != 1 {
+		t.Errorf("NumBands = %d, want 1", drc.NumBands)
+	}
+
+	if drc.DynRngSgn[0] != 0 {
+		t.Errorf("DynRngSgn[0] = %d, want 0", drc.DynRngSgn[0])
+	}
+
+	if drc.DynRngCtl[0] != 0x55 {
+		t.Errorf("DynRngCtl[0] = %d, want 85", drc.DynRngCtl[0])
+	}
+}
+
+func TestParseDynamicRangeInfo_WithInstanceTag(t *testing.T) {
+	// DRC with instance tag:
+	// - has_instance_tag: 1 bit = 1
+	// - pce_instance_tag: 4 bits = 0x5
+	// - reserved: 4 bits = 0
+	// - excluded_chns_present: 1 bit = 0
+	// - has_bands_data: 1 bit = 0
+	// - has_prog_ref_level: 1 bit = 0
+	// - dyn_rng_sgn[0]: 1 bit = 1
+	// - dyn_rng_ctl[0]: 7 bits = 0x7F (127)
+	//
+	// Binary: 1 0101 0000 0 0 0 1 1111111
+	// Byte 0: 1010_1000 = 0xA8
+	// Byte 1: 0000_1111 = 0x0F
+	// Byte 2: 1111_xxxx = 0xF0
+	//
+	// n starts at 1, +1 for instance_tag = 2, +1 for dyn_rng = 3
+
+	data := []byte{0xA8, 0x0F, 0xF0}
+	r := bits.NewReader(data)
+	drc := &DRCInfo{}
+
+	bytesRead := parseDynamicRangeInfo(r, drc)
+
+	if bytesRead != 3 {
+		t.Errorf("bytesRead = %d, want 3", bytesRead)
+	}
+
+	if drc.PCEInstanceTag != 5 {
+		t.Errorf("PCEInstanceTag = %d, want 5", drc.PCEInstanceTag)
+	}
+
+	if drc.DynRngSgn[0] != 1 {
+		t.Errorf("DynRngSgn[0] = %d, want 1", drc.DynRngSgn[0])
+	}
+
+	if drc.DynRngCtl[0] != 0x7F {
+		t.Errorf("DynRngCtl[0] = %d, want 127", drc.DynRngCtl[0])
+	}
+}
+
+func TestParseDynamicRangeInfo_WithProgRefLevel(t *testing.T) {
+	// DRC with program reference level:
+	// - has_instance_tag: 1 bit = 0
+	// - excluded_chns_present: 1 bit = 0
+	// - has_bands_data: 1 bit = 0
+	// - has_prog_ref_level: 1 bit = 1
+	// - prog_ref_level: 7 bits = 0x40 (64)
+	// - reserved: 1 bit = 0
+	// - dyn_rng_sgn[0]: 1 bit = 0
+	// - dyn_rng_ctl[0]: 7 bits = 0x20 (32)
+	//
+	// Binary: 0 0 0 1 1000000 0 0 0100000
+	// Byte 0: 0001_1000 = 0x18
+	// Byte 1: 0000_0010 = 0x02
+	// Byte 2: 0000_0xxx = 0x00
+	//
+	// n starts at 1, +1 for prog_ref_level = 2, +1 for dyn_rng = 3
+
+	data := []byte{0x18, 0x02, 0x00}
+	r := bits.NewReader(data)
+	drc := &DRCInfo{}
+
+	bytesRead := parseDynamicRangeInfo(r, drc)
+
+	if bytesRead != 3 {
+		t.Errorf("bytesRead = %d, want 3", bytesRead)
+	}
+
+	if drc.ProgRefLevel != 64 {
+		t.Errorf("ProgRefLevel = %d, want 64", drc.ProgRefLevel)
+	}
+
+	if drc.DynRngCtl[0] != 32 {
+		t.Errorf("DynRngCtl[0] = %d, want 32", drc.DynRngCtl[0])
+	}
+}
+
+func TestParseDynamicRangeInfo_MultiBand(t *testing.T) {
+	// DRC with multiple bands:
+	// - has_instance_tag: 1 bit = 0
+	// - excluded_chns_present: 1 bit = 0
+	// - has_bands_data: 1 bit = 1
+	// - band_incr: 4 bits = 2 (num_bands = 1 + 2 = 3)
+	// - drc_bands_reserved_bits: 4 bits = 0
+	// - band_top[0]: 8 bits = 10 (0x0A)
+	// - band_top[1]: 8 bits = 20 (0x14)
+	// - band_top[2]: 8 bits = 30 (0x1E)
+	// - has_prog_ref_level: 1 bit = 0
+	// - dyn_rng_sgn[0]: 1 bit = 0, dyn_rng_ctl[0]: 7 bits = 10
+	// - dyn_rng_sgn[1]: 1 bit = 0, dyn_rng_ctl[1]: 7 bits = 20
+	// - dyn_rng_sgn[2]: 1 bit = 0, dyn_rng_ctl[2]: 7 bits = 30
+	//
+	// Bit layout:
+	// 0 0 1 0010 0000 00001010 00010100 00011110 0 00001010 00010100 00011110
+	//
+	// Byte 0: 0 0 1 0010 0 = 0010_0100 = 0x24
+	// Byte 1: 000 00001 = 0000_0001 = 0x01
+	// Byte 2: 010 00010 = 0100_0010 = 0x42
+	// Byte 3: 100 00011 = 1000_0011 = 0x83
+	// Byte 4: 110 0 0000 = 1100_0000 = 0xC0
+	// Byte 5: 1010 0001 = 1010_0001 = 0xA1
+	// Byte 6: 0100 0001 = 0100_0001 = 0x41
+	// Byte 7: 1110 xxxx = 1110_0000 = 0xE0
+	//
+	// n count: start=1, +1 bands_data, +3 band_top, +3 dyn_rng = 8
+
+	data := []byte{0x24, 0x01, 0x42, 0x83, 0xC0, 0xA1, 0x41, 0xE0}
+	r := bits.NewReader(data)
+	drc := &DRCInfo{}
+
+	bytesRead := parseDynamicRangeInfo(r, drc)
+
+	if bytesRead != 8 {
+		t.Errorf("bytesRead = %d, want 8", bytesRead)
+	}
+
+	if drc.NumBands != 3 {
+		t.Errorf("NumBands = %d, want 3", drc.NumBands)
+	}
+
+	if drc.BandTop[0] != 10 || drc.BandTop[1] != 20 || drc.BandTop[2] != 30 {
+		t.Errorf("BandTop = %v, want [10, 20, 30]", drc.BandTop[:3])
+	}
+
+	if drc.DynRngCtl[0] != 10 || drc.DynRngCtl[1] != 20 || drc.DynRngCtl[2] != 30 {
+		t.Errorf("DynRngCtl = %v, want [10, 20, 30]", drc.DynRngCtl[:3])
+	}
+}
