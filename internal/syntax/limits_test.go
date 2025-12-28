@@ -16,6 +16,7 @@ func TestLimits(t *testing.T) {
 		{"MAX_SFB", MaxSFB, 51},
 		{"MAX_LTP_SFB", MaxLTPSFB, 40},
 		{"MAX_LTP_SFB_S", MaxLTPSFBS, 8},
+		{"MAX_COUPLED_ELEMENTS", MaxCoupledElements, 8},
 	}
 
 	for _, tt := range tests {
