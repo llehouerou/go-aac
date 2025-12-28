@@ -172,3 +172,93 @@ func TestParseCCEHeader_CPETarget_BothChannels(t *testing.T) {
 		t.Errorf("GainElementScale: got %d, want 2", result.GainElementScale)
 	}
 }
+
+func TestParseCCEGainElements_IndependentlySwitched(t *testing.T) {
+	// When ind_sw_cce_flag is set, common_gain_element_present is always 1
+	// So we just decode huffman scale factors for each gain element list
+	// For simplicity, use huffman pattern that decodes to 0 (60-60=0)
+	// The shortest SF huffman code is "1111111111" (10 bits) = delta 0
+
+	// Create a minimal ICS with 1 window group, 2 SFBs, both with spectral codebook
+	ics := &ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          2,
+	}
+	ics.SFBCB[0][0] = 1 // Non-zero codebook
+	ics.SFBCB[0][1] = 1 // Non-zero codebook
+
+	// 2 gain element lists, each needs 1 huffman code (10 bits each)
+	// 1111111111 1111111111 = 0xFF 0xFF 0xC0
+	data := []byte{0xFF, 0xFF, 0xC0}
+	r := bits.NewReader(data)
+
+	result := &CCEResult{
+		IndSwCCEFlag:        true,
+		NumGainElementLists: 2,
+	}
+	result.Element.ICS1 = *ics
+
+	err := parseCCEGainElements(r, result)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseCCEGainElements_CommonGainElement(t *testing.T) {
+	// When common_gain_element_present=1, decode one huffman scale factor
+	// When common_gain_element_present=0, decode per-SFB scale factors
+
+	ics := &ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          2,
+	}
+	ics.SFBCB[0][0] = 1 // Non-zero codebook
+	ics.SFBCB[0][1] = 0 // Zero codebook (no scale factor needed)
+
+	// 2 gain element lists (c starts at 1, so only 1 iteration)
+	// First: common_gain_element_present=1 (1 bit), then huffman code (10 bits)
+	// 1 1111111111 = 0xFF 0xE0
+	data := []byte{0xFF, 0xE0}
+	r := bits.NewReader(data)
+
+	result := &CCEResult{
+		IndSwCCEFlag:        false,
+		NumGainElementLists: 2,
+	}
+	result.Element.ICS1 = *ics
+
+	err := parseCCEGainElements(r, result)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseCCEGainElements_PerSFBGain(t *testing.T) {
+	// When common_gain_element_present=0, decode per-SFB scale factors
+	// Only for SFBs with non-zero codebook
+
+	ics := &ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          3,
+	}
+	ics.SFBCB[0][0] = 1 // Non-zero - needs scale factor
+	ics.SFBCB[0][1] = 0 // Zero - no scale factor
+	ics.SFBCB[0][2] = 5 // Non-zero - needs scale factor
+
+	// 2 gain element lists
+	// c=1: common_gain_element_present=0 (1 bit), then 2 huffman codes (10 bits each)
+	// 0 1111111111 1111111111 = 0x7F 0xFF 0xC0
+	data := []byte{0x7F, 0xFF, 0xC0}
+	r := bits.NewReader(data)
+
+	result := &CCEResult{
+		IndSwCCEFlag:        false,
+		NumGainElementLists: 2,
+	}
+	result.Element.ICS1 = *ics
+
+	err := parseCCEGainElements(r, result)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

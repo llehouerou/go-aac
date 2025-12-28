@@ -1,7 +1,10 @@
 // internal/syntax/cce.go
 package syntax
 
-import "github.com/llehouerou/go-aac/internal/bits"
+import (
+	"github.com/llehouerou/go-aac/internal/bits"
+	"github.com/llehouerou/go-aac/internal/huffman"
+)
 
 // CCEConfig holds configuration for Coupling Channel Element parsing.
 // Ported from: coupling_channel_element() parameters in ~/dev/faad2/libfaad/syntax.c:987
@@ -87,6 +90,46 @@ func parseCCEHeader(r *bits.Reader, result *CCEResult) error {
 	// Read gain_element_scale (2 bits)
 	// Ported from: syntax.c:1033-1034
 	result.GainElementScale = uint8(r.GetBits(2))
+
+	return nil
+}
+
+// parseCCEGainElements parses the gain element lists for CCE.
+// Ported from: coupling_channel_element() in ~/dev/faad2/libfaad/syntax.c:1046-1073
+func parseCCEGainElements(r *bits.Reader, result *CCEResult) error {
+	ics := &result.Element.ICS1
+
+	// For each gain element list (starting from c=1)
+	// Ported from: syntax.c:1046
+	for c := uint8(1); c < result.NumGainElementLists; c++ {
+		var cge bool
+
+		if result.IndSwCCEFlag {
+			// For independently switched CCE, always use common gain
+			// Ported from: syntax.c:1050-1052
+			cge = true
+		} else {
+			// Read common_gain_element_present (1 bit)
+			// Ported from: syntax.c:1054-1055
+			cge = r.Get1Bit() != 0
+		}
+
+		if cge {
+			// Common gain element: decode single huffman scale factor
+			// Ported from: syntax.c:1058-1060
+			_ = huffman.ScaleFactor(r)
+		} else {
+			// Per-SFB gain elements: decode scale factor for each non-zero SFB
+			// Ported from: syntax.c:1062-1071
+			for g := uint8(0); g < ics.NumWindowGroups; g++ {
+				for sfb := uint8(0); sfb < ics.MaxSFB; sfb++ {
+					if ics.SFBCB[g][sfb] != uint8(huffman.ZeroHCB) {
+						_ = huffman.ScaleFactor(r)
+					}
+				}
+			}
+		}
+	}
 
 	return nil
 }
