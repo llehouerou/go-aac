@@ -463,3 +463,89 @@ func TestMSDecode_SWBOffsetMaxClamping(t *testing.T) {
 		}
 	}
 }
+
+func TestMSDecode_EmptyMaxSFB(t *testing.T) {
+	// MaxSFB = 0 means no bands to process
+	icsL := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          0,
+		MSMaskPresent:   2,
+	}
+	icsL.WindowGroupLength[0] = 1
+	icsL.SWBOffsetMax = 1024
+
+	icsR := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          0,
+	}
+	icsR.WindowGroupLength[0] = 1
+
+	lSpec := []float64{10.0, 20.0}
+	rSpec := []float64{2.0, 4.0}
+
+	cfg := &MSDecodeConfig{
+		ICSL:        icsL,
+		ICSR:        icsR,
+		FrameLength: 1024,
+	}
+
+	MSDecode(lSpec, rSpec, cfg)
+
+	// Should be unchanged
+	if lSpec[0] != 10.0 || lSpec[1] != 20.0 {
+		t.Errorf("lSpec modified when MaxSFB=0")
+	}
+	if rSpec[0] != 2.0 || rSpec[1] != 4.0 {
+		t.Errorf("rSpec modified when MaxSFB=0")
+	}
+}
+
+func TestMSDecode_NegativeValues(t *testing.T) {
+	// Test with negative spectral values
+	icsL := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		NumSWB:          1,
+		MSMaskPresent:   2,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	icsL.WindowGroupLength[0] = 1
+	icsL.SWBOffset[0] = 0
+	icsL.SWBOffset[1] = 4
+	icsL.SWBOffsetMax = 1024
+	icsL.SFBCB[0][0] = 1
+
+	icsR := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		NumSWB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	icsR.WindowGroupLength[0] = 1
+	icsR.SWBOffset[0] = 0
+	icsR.SWBOffset[1] = 4
+	icsR.SFBCB[0][0] = 1
+
+	// M = -10, S = 3
+	// L = M + S = -7
+	// R = M - S = -13
+	lSpec := []float64{-10.0, -10.0, -10.0, -10.0}
+	rSpec := []float64{3.0, 3.0, 3.0, 3.0}
+
+	cfg := &MSDecodeConfig{
+		ICSL:        icsL,
+		ICSR:        icsR,
+		FrameLength: 1024,
+	}
+
+	MSDecode(lSpec, rSpec, cfg)
+
+	for i := 0; i < 4; i++ {
+		if lSpec[i] != -7.0 {
+			t.Errorf("lSpec[%d] = %v, want -7.0", i, lSpec[i])
+		}
+		if rSpec[i] != -13.0 {
+			t.Errorf("rSpec[%d] = %v, want -13.0", i, rSpec[i])
+		}
+	}
+}
