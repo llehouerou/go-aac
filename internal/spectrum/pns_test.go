@@ -511,3 +511,117 @@ func TestPNSDecode_OnlyRightHasPNS(t *testing.T) {
 		t.Error("specR should have noise")
 	}
 }
+
+func TestPNSDecode_ShortBlocks(t *testing.T) {
+	// Test with 8 short windows grouped into 2 groups.
+	// Note: Due to how FAAD2 clamps begin/end against swb_offset_max (which is 128 for
+	// short blocks), noise is only generated for windows where base + swb_offset < swb_offset_max.
+	// This means only window 0 gets noise when using the per-window swb_offset_max.
+	//
+	// To test proper short block handling, we use the full frame length as swb_offset_max,
+	// which matches MS stereo behavior and allows noise generation in all windows.
+	ics := &syntax.ICStream{
+		NumWindowGroups: 2,
+		NumWindows:      8,
+		MaxSFB:          1,
+		WindowSequence:  syntax.EightShortSequence,
+	}
+	ics.WindowGroupLength[0] = 4
+	ics.WindowGroupLength[1] = 4
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 4
+	// Use frame length (1024) as swb_offset_max to allow noise in all windows
+	ics.SWBOffsetMax = 1024
+	ics.SFBCB[0][0] = uint8(huffman.NoiseHCB) // Noise in group 0
+	ics.SFBCB[1][0] = uint8(huffman.NoiseHCB) // Noise in group 1
+	ics.ScaleFactors[0][0] = 0
+	ics.ScaleFactors[1][0] = 0
+
+	spec := make([]float64, 1024)
+
+	state := NewPNSState()
+	cfg := &PNSDecodeConfig{
+		ICSL:        ics,
+		FrameLength: 1024,
+	}
+
+	PNSDecode(spec, nil, state, cfg)
+
+	// Check that noise was generated in both groups
+	// Group 0: windows 0-3, each 128 samples, first 4 coeffs per window
+	for win := 0; win < 4; win++ {
+		base := win * 128
+		for i := 0; i < 4; i++ {
+			if spec[base+i] == 0 {
+				t.Errorf("spec[%d] (group 0, win %d) = 0, expected noise", base+i, win)
+			}
+		}
+	}
+
+	// Group 1: windows 4-7
+	for win := 4; win < 8; win++ {
+		base := win * 128
+		for i := 0; i < 4; i++ {
+			if spec[base+i] == 0 {
+				t.Errorf("spec[%d] (group 1, win %d) = 0, expected noise", base+i, win)
+			}
+		}
+	}
+}
+
+func TestPNSDecode_MixedGroups(t *testing.T) {
+	// One group has PNS, one doesn't.
+	// Using frame length as swb_offset_max to test multi-window behavior.
+	ics := &syntax.ICStream{
+		NumWindowGroups: 2,
+		NumWindows:      8,
+		MaxSFB:          1,
+		WindowSequence:  syntax.EightShortSequence,
+	}
+	ics.WindowGroupLength[0] = 4
+	ics.WindowGroupLength[1] = 4
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 4
+	// Use frame length (1024) as swb_offset_max to allow noise in all windows
+	ics.SWBOffsetMax = 1024
+	ics.SFBCB[0][0] = uint8(huffman.NoiseHCB) // Noise in group 0
+	ics.SFBCB[1][0] = 1                       // Normal in group 1
+	ics.ScaleFactors[0][0] = 0
+
+	spec := make([]float64, 1024)
+	// Mark group 1 with specific values
+	for win := 4; win < 8; win++ {
+		base := win * 128
+		for i := 0; i < 4; i++ {
+			spec[base+i] = 99.0
+		}
+	}
+
+	state := NewPNSState()
+	cfg := &PNSDecodeConfig{
+		ICSL:        ics,
+		FrameLength: 1024,
+	}
+
+	PNSDecode(spec, nil, state, cfg)
+
+	// Group 0: should have noise (not 0 or 99)
+	for win := 0; win < 4; win++ {
+		base := win * 128
+		for i := 0; i < 4; i++ {
+			if spec[base+i] == 0 || spec[base+i] == 99.0 {
+				t.Errorf("spec[%d] (group 0) = %v, expected random noise", base+i, spec[base+i])
+			}
+		}
+	}
+
+	// Group 1: should remain 99.0
+	for win := 4; win < 8; win++ {
+		base := win * 128
+		for i := 0; i < 4; i++ {
+			if spec[base+i] != 99.0 {
+				t.Errorf("spec[%d] (group 1) = %v, want 99.0", base+i, spec[base+i])
+			}
+		}
+	}
+}
