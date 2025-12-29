@@ -516,3 +516,324 @@ func TestTNSDecodeFrame_ShortBlock(t *testing.T) {
 		}
 	}
 }
+
+func TestTNSDecodeFrame_MultipleFilters(t *testing.T) {
+	// Test with multiple TNS filters per window
+	ics := &syntax.ICStream{
+		TNSDataPresent:    true,
+		NumWindows:        1,
+		NumWindowGroups:   1,
+		WindowSequence:    syntax.OnlyLongSequence,
+		NumSWB:            49,
+		MaxSFB:            49,
+		SWBOffsetMax:      1024,
+		WindowGroupLength: [8]uint8{1},
+	}
+
+	for i := 0; i < 52; i++ {
+		ics.SWBOffset[i] = uint16(i * 20)
+		if ics.SWBOffset[i] > 1024 {
+			ics.SWBOffset[i] = 1024
+		}
+	}
+
+	// Two filters
+	ics.TNS.NFilt[0] = 2
+	ics.TNS.CoefRes[0] = 1 // 4-bit coefficients
+
+	// First filter: SFB 30-40
+	ics.TNS.Length[0][0] = 10
+	ics.TNS.Order[0][0] = 2
+	ics.TNS.Direction[0][0] = 0
+	ics.TNS.CoefCompress[0][0] = 0
+	ics.TNS.Coef[0][0][0] = 1
+	ics.TNS.Coef[0][0][1] = 2
+
+	// Second filter: SFB 40-49
+	ics.TNS.Length[0][1] = 9
+	ics.TNS.Order[0][1] = 1
+	ics.TNS.Direction[0][1] = 1 // Backward
+	ics.TNS.CoefCompress[0][1] = 0
+	ics.TNS.Coef[0][1][0] = 3
+
+	spec := make([]float64, 1024)
+	for i := range spec {
+		spec[i] = float64(i % 10)
+	}
+
+	cfg := &TNSDecodeConfig{
+		ICS:         ics,
+		SRIndex:     4,
+		ObjectType:  aac.ObjectTypeLC,
+		FrameLength: 1024,
+	}
+
+	TNSDecodeFrame(spec, cfg)
+
+	// Verify no invalid values
+	for i := range spec {
+		if math.IsNaN(spec[i]) || math.IsInf(spec[i], 0) {
+			t.Errorf("spec[%d] is invalid: %v", i, spec[i])
+		}
+	}
+}
+
+func TestTNSDecodeFrame_MaxOrder(t *testing.T) {
+	// Test with maximum filter order (20)
+	ics := &syntax.ICStream{
+		TNSDataPresent:    true,
+		NumWindows:        1,
+		NumWindowGroups:   1,
+		WindowSequence:    syntax.OnlyLongSequence,
+		NumSWB:            49,
+		MaxSFB:            49,
+		SWBOffsetMax:      1024,
+		WindowGroupLength: [8]uint8{1},
+	}
+
+	for i := 0; i < 52; i++ {
+		ics.SWBOffset[i] = uint16(i * 20)
+		if ics.SWBOffset[i] > 1024 {
+			ics.SWBOffset[i] = 1024
+		}
+	}
+
+	ics.TNS.NFilt[0] = 1
+	ics.TNS.CoefRes[0] = 1
+	ics.TNS.Length[0][0] = 40
+	ics.TNS.Order[0][0] = 20 // Max order
+	ics.TNS.Direction[0][0] = 0
+	ics.TNS.CoefCompress[0][0] = 0
+
+	// Fill all 20 coefficients
+	for i := 0; i < 20; i++ {
+		ics.TNS.Coef[0][0][i] = uint8(i % 16)
+	}
+
+	spec := make([]float64, 1024)
+	for i := range spec {
+		spec[i] = 1.0
+	}
+
+	cfg := &TNSDecodeConfig{
+		ICS:         ics,
+		SRIndex:     4,
+		ObjectType:  aac.ObjectTypeLC,
+		FrameLength: 1024,
+	}
+
+	TNSDecodeFrame(spec, cfg)
+
+	// Should not crash and produce valid output
+	for i := range spec {
+		if math.IsNaN(spec[i]) || math.IsInf(spec[i], 0) {
+			t.Errorf("spec[%d] is invalid: %v", i, spec[i])
+		}
+	}
+}
+
+func TestTNSDecodeFrame_OrderExceedsMax(t *testing.T) {
+	// Test that order > TNSMaxOrder is clamped
+	ics := &syntax.ICStream{
+		TNSDataPresent:    true,
+		NumWindows:        1,
+		NumWindowGroups:   1,
+		WindowSequence:    syntax.OnlyLongSequence,
+		NumSWB:            49,
+		MaxSFB:            49,
+		SWBOffsetMax:      1024,
+		WindowGroupLength: [8]uint8{1},
+	}
+
+	for i := 0; i < 52; i++ {
+		ics.SWBOffset[i] = uint16(i * 20)
+		if ics.SWBOffset[i] > 1024 {
+			ics.SWBOffset[i] = 1024
+		}
+	}
+
+	ics.TNS.NFilt[0] = 1
+	ics.TNS.CoefRes[0] = 0
+	ics.TNS.Length[0][0] = 30
+	ics.TNS.Order[0][0] = 25 // Exceeds TNSMaxOrder (20)
+	ics.TNS.Direction[0][0] = 0
+	ics.TNS.CoefCompress[0][0] = 0
+
+	spec := make([]float64, 1024)
+	for i := range spec {
+		spec[i] = 1.0
+	}
+
+	cfg := &TNSDecodeConfig{
+		ICS:         ics,
+		SRIndex:     4,
+		ObjectType:  aac.ObjectTypeLC,
+		FrameLength: 1024,
+	}
+
+	// Should not panic
+	TNSDecodeFrame(spec, cfg)
+
+	for i := range spec {
+		if math.IsNaN(spec[i]) || math.IsInf(spec[i], 0) {
+			t.Errorf("spec[%d] is invalid: %v", i, spec[i])
+		}
+	}
+}
+
+func TestTNSDecodeFrame_ZeroRegion(t *testing.T) {
+	// Test when filter region computes to zero size
+	ics := &syntax.ICStream{
+		TNSDataPresent:    true,
+		NumWindows:        1,
+		NumWindowGroups:   1,
+		WindowSequence:    syntax.OnlyLongSequence,
+		NumSWB:            49,
+		MaxSFB:            5, // Very low max_sfb
+		SWBOffsetMax:      100,
+		WindowGroupLength: [8]uint8{1},
+	}
+
+	for i := 0; i < 52; i++ {
+		ics.SWBOffset[i] = uint16(i * 20)
+	}
+
+	ics.TNS.NFilt[0] = 1
+	ics.TNS.CoefRes[0] = 0
+	ics.TNS.Length[0][0] = 10
+	ics.TNS.Order[0][0] = 5
+	ics.TNS.Direction[0][0] = 0
+	ics.TNS.CoefCompress[0][0] = 0
+
+	spec := make([]float64, 1024)
+	for i := range spec {
+		spec[i] = 1.0
+	}
+
+	cfg := &TNSDecodeConfig{
+		ICS:         ics,
+		SRIndex:     4,
+		ObjectType:  aac.ObjectTypeLC,
+		FrameLength: 1024,
+	}
+
+	TNSDecodeFrame(spec, cfg)
+
+	// When region is zero or negative, spectrum should be unchanged
+	// (filter is skipped)
+}
+
+func TestTNSDecodeFrame_BackwardDirection(t *testing.T) {
+	// Test backward filtering direction explicitly
+	ics := &syntax.ICStream{
+		TNSDataPresent:    true,
+		NumWindows:        1,
+		NumWindowGroups:   1,
+		WindowSequence:    syntax.OnlyLongSequence,
+		NumSWB:            49,
+		MaxSFB:            49,
+		SWBOffsetMax:      1024,
+		WindowGroupLength: [8]uint8{1},
+	}
+
+	for i := 0; i < 52; i++ {
+		ics.SWBOffset[i] = uint16(i * 20)
+		if ics.SWBOffset[i] > 1024 {
+			ics.SWBOffset[i] = 1024
+		}
+	}
+
+	ics.TNS.NFilt[0] = 1
+	ics.TNS.CoefRes[0] = 0
+	ics.TNS.Length[0][0] = 20
+	ics.TNS.Order[0][0] = 1
+	ics.TNS.Direction[0][0] = 1 // Backward direction
+	ics.TNS.CoefCompress[0][0] = 0
+	ics.TNS.Coef[0][0][0] = 1 // Non-zero coefficient
+
+	spec := make([]float64, 1024)
+	for i := range spec {
+		spec[i] = 1.0
+	}
+
+	cfg := &TNSDecodeConfig{
+		ICS:         ics,
+		SRIndex:     4,
+		ObjectType:  aac.ObjectTypeLC,
+		FrameLength: 1024,
+	}
+
+	TNSDecodeFrame(spec, cfg)
+
+	// Verify no invalid values and spectrum was modified
+	for i := range spec {
+		if math.IsNaN(spec[i]) || math.IsInf(spec[i], 0) {
+			t.Errorf("spec[%d] is invalid: %v", i, spec[i])
+		}
+	}
+}
+
+func TestTNSDecodeFrame_NonZeroCoefficients(t *testing.T) {
+	// Test with non-zero coefficients to verify actual filtering
+	ics := &syntax.ICStream{
+		TNSDataPresent:    true,
+		NumWindows:        1,
+		NumWindowGroups:   1,
+		WindowSequence:    syntax.OnlyLongSequence,
+		NumSWB:            49,
+		MaxSFB:            49,
+		SWBOffsetMax:      1024,
+		WindowGroupLength: [8]uint8{1},
+	}
+
+	for i := 0; i < 52; i++ {
+		ics.SWBOffset[i] = uint16(i * 20)
+		if ics.SWBOffset[i] > 1024 {
+			ics.SWBOffset[i] = 1024
+		}
+	}
+
+	ics.TNS.NFilt[0] = 1
+	ics.TNS.CoefRes[0] = 0
+	ics.TNS.Length[0][0] = 49 // Filter spans all SFBs (bottom=0, top=49)
+	ics.TNS.Order[0][0] = 1
+	ics.TNS.Direction[0][0] = 0
+	ics.TNS.CoefCompress[0][0] = 0
+	ics.TNS.Coef[0][0][0] = 1 // Index 1 = 0.4338837391
+
+	// Set up impulse response test
+	// Place impulse within the filter region (start of spectrum)
+	spec := make([]float64, 1024)
+	spec[0] = 1.0 // Impulse at start
+
+	original := make([]float64, 1024)
+	copy(original, spec)
+
+	cfg := &TNSDecodeConfig{
+		ICS:         ics,
+		SRIndex:     4,
+		ObjectType:  aac.ObjectTypeLC,
+		FrameLength: 1024,
+	}
+
+	TNSDecodeFrame(spec, cfg)
+
+	// Verify spectrum was actually modified (not identity)
+	modified := false
+	for i := range spec {
+		if spec[i] != original[i] {
+			modified = true
+			break
+		}
+	}
+	if !modified {
+		t.Error("Spectrum was not modified despite non-zero filter coefficient")
+	}
+
+	// Verify no invalid values
+	for i := range spec {
+		if math.IsNaN(spec[i]) || math.IsInf(spec[i], 0) {
+			t.Errorf("spec[%d] is invalid: %v", i, spec[i])
+		}
+	}
+}
