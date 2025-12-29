@@ -77,7 +77,20 @@ func ParseRawDataBlock(r *bits.Reader, cfg *RawDataBlockConfig, drc *DRCInfo) (*
 
 		switch idSynEle {
 		case IDSCE:
-			// TODO: Parse SCE (Task 5)
+			// Parse Single Channel Element
+			// Ported from: decode_sce_lfe() call in syntax.c:472
+			sceCfg := &SCEConfig{
+				SFIndex:     cfg.SFIndex,
+				FrameLength: cfg.FrameLength,
+				ObjectType:  cfg.ObjectType,
+			}
+			sceResult, err := ParseSingleChannelElement(r, result.NumChannels, sceCfg)
+			if err != nil {
+				return nil, err
+			}
+			result.SCEResults[result.SCECount] = sceResult
+			result.SCECount++
+			result.NumChannels++
 
 		case IDCPE:
 			// TODO: Parse CPE (Task 6)
