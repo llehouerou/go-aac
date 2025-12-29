@@ -400,3 +400,124 @@ func TestApplyScaleFactors_MultipleSFB(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyScaleFactors_ZeroCodebook(t *testing.T) {
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		NumSWB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 4
+	ics.SFBCB[0][0] = uint8(huffman.ZeroHCB)
+	ics.ScaleFactors[0][0] = 0 // Zero codebook has sf=0
+
+	// Data should be all zeros from spectral decoding, but test anyway
+	specData := []float64{0.0, 0.0, 0.0, 0.0}
+
+	cfg := &ApplyScaleFactorsConfig{
+		ICS:         ics,
+		FrameLength: 1024,
+	}
+
+	ApplyScaleFactors(specData, cfg)
+
+	// Should remain zero
+	for i, v := range specData {
+		if v != 0.0 {
+			t.Errorf("specData[%d] = %v, want 0.0", i, v)
+		}
+	}
+}
+
+func TestApplyScaleFactors_LargeScaleFactor(t *testing.T) {
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		NumSWB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 4
+	ics.SFBCB[0][0] = uint8(huffman.EscHCB)
+	ics.ScaleFactors[0][0] = 255 // Maximum valid scale factor
+
+	specData := []float64{1.0, 1.0, 1.0, 1.0}
+
+	cfg := &ApplyScaleFactorsConfig{
+		ICS:         ics,
+		FrameLength: 1024,
+	}
+
+	// Should not panic
+	ApplyScaleFactors(specData, cfg)
+
+	// Just verify it runs without error and produces positive values
+	for i, v := range specData {
+		if v <= 0 {
+			t.Errorf("specData[%d] = %v, want positive value", i, v)
+		}
+	}
+}
+
+func TestApplyScaleFactors_SmallScaleFactor(t *testing.T) {
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		NumSWB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 4
+	ics.SFBCB[0][0] = uint8(huffman.EscHCB)
+	ics.ScaleFactors[0][0] = 0 // Minimum valid scale factor
+
+	specData := []float64{1.0, 1.0, 1.0, 1.0}
+
+	cfg := &ApplyScaleFactorsConfig{
+		ICS:         ics,
+		FrameLength: 1024,
+	}
+
+	// Should not panic
+	ApplyScaleFactors(specData, cfg)
+
+	// Output should be very small but positive (2^(-25) * 1 is tiny)
+	for i, v := range specData {
+		if v <= 0 || v >= 1.0 {
+			t.Errorf("specData[%d] = %v, want small positive value", i, v)
+		}
+	}
+}
+
+func TestApplyScaleFactors_EmptyMaxSFB(t *testing.T) {
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          0, // No scalefactor bands used
+		NumSWB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 4
+
+	specData := []float64{1.0, 1.0, 1.0, 1.0}
+
+	cfg := &ApplyScaleFactorsConfig{
+		ICS:         ics,
+		FrameLength: 1024,
+	}
+
+	// Should not modify anything when MaxSFB=0
+	ApplyScaleFactors(specData, cfg)
+
+	for i, v := range specData {
+		if v != 1.0 {
+			t.Errorf("specData[%d] = %v, want 1.0 (unmodified)", i, v)
+		}
+	}
+}
