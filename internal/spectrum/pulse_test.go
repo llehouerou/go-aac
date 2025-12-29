@@ -178,3 +178,96 @@ func TestPulseDecode_SWBOffsetMaxClamp(t *testing.T) {
 		t.Errorf("specData[110]: got %d, want 51", specData[110])
 	}
 }
+
+func TestPulseDecode_ExactFrameLength(t *testing.T) {
+	// Test position exactly at frame length - 1 (valid)
+	ics := &syntax.ICStream{
+		NumSWB:       10,
+		SWBOffsetMax: 1024,
+	}
+	ics.SWBOffset[0] = 1020
+
+	ics.Pul = syntax.PulseInfo{
+		NumberPulse:   0,
+		PulseStartSFB: 0,
+		PulseOffset:   [4]uint8{3, 0, 0, 0}, // Position = 1023
+		PulseAmp:      [4]uint8{1, 0, 0, 0},
+	}
+
+	specData := make([]int16, 1024)
+	specData[1023] = 10
+
+	err := PulseDecode(ics, specData, 1024)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if specData[1023] != 11 {
+		t.Errorf("specData[1023]: got %d, want 11", specData[1023])
+	}
+}
+
+func TestPulseDecode_AccumulatingOffsets(t *testing.T) {
+	// Verify offsets accumulate correctly
+	ics := &syntax.ICStream{
+		NumSWB:       10,
+		SWBOffsetMax: 1024,
+	}
+	ics.SWBOffset[0] = 0
+
+	// Each offset adds to previous position
+	ics.Pul = syntax.PulseInfo{
+		NumberPulse:   2, // 3 pulses
+		PulseStartSFB: 0,
+		PulseOffset:   [4]uint8{10, 10, 10, 0}, // Positions: 10, 20, 30
+		PulseAmp:      [4]uint8{1, 1, 1, 0},
+	}
+
+	specData := make([]int16, 1024)
+	specData[10] = 1
+	specData[20] = 2
+	specData[30] = 3
+
+	err := PulseDecode(ics, specData, 1024)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if specData[10] != 2 {
+		t.Errorf("specData[10]: got %d, want 2", specData[10])
+	}
+	if specData[20] != 3 {
+		t.Errorf("specData[20]: got %d, want 3", specData[20])
+	}
+	if specData[30] != 4 {
+		t.Errorf("specData[30]: got %d, want 4", specData[30])
+	}
+}
+
+func TestPulseDecode_LargeAmplitude(t *testing.T) {
+	// Test with maximum amplitude (15)
+	ics := &syntax.ICStream{
+		NumSWB:       10,
+		SWBOffsetMax: 1024,
+	}
+	ics.SWBOffset[0] = 0
+
+	ics.Pul = syntax.PulseInfo{
+		NumberPulse:   0,
+		PulseStartSFB: 0,
+		PulseOffset:   [4]uint8{0, 0, 0, 0},
+		PulseAmp:      [4]uint8{15, 0, 0, 0}, // Max amplitude (4 bits)
+	}
+
+	specData := make([]int16, 1024)
+	specData[0] = 100
+
+	err := PulseDecode(ics, specData, 1024)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if specData[0] != 115 {
+		t.Errorf("specData[0]: got %d, want 115", specData[0])
+	}
+}
