@@ -290,3 +290,263 @@ func TestISDecode_MSMaskInteraction(t *testing.T) {
 		})
 	}
 }
+
+func TestISDecode_ShortBlocks(t *testing.T) {
+	// Test 8 short windows grouped into 2 groups of 4
+	icsL := &syntax.ICStream{
+		NumWindowGroups: 2,
+		NumWindows:      8,
+		MaxSFB:          1,
+		NumSWB:          1,
+		WindowSequence:  syntax.EightShortSequence,
+	}
+	icsL.WindowGroupLength[0] = 4
+	icsL.WindowGroupLength[1] = 4
+	icsL.SWBOffset[0] = 0
+	icsL.SWBOffset[1] = 4
+	icsL.SWBOffsetMax = 128
+	icsL.SFBCB[0][0] = 1
+	icsL.SFBCB[1][0] = 1
+
+	icsR := &syntax.ICStream{
+		NumWindowGroups: 2,
+		NumWindows:      8,
+		MaxSFB:          1,
+		NumSWB:          1,
+		WindowSequence:  syntax.EightShortSequence,
+	}
+	icsR.WindowGroupLength[0] = 4
+	icsR.WindowGroupLength[1] = 4
+	icsR.SWBOffset[0] = 0
+	icsR.SWBOffset[1] = 4
+	icsR.SWBOffsetMax = 128
+	icsR.SFBCB[0][0] = uint8(huffman.IntensityHCB) // IS in first group
+	icsR.SFBCB[1][0] = uint8(huffman.IntensityHCB) // IS in second group
+	icsR.ScaleFactors[0][0] = 0                    // scale = 1.0
+	icsR.ScaleFactors[1][0] = 4                    // scale = 0.5
+
+	// FrameLength=1024, nshort=128
+	lSpec := make([]float64, 1024)
+	rSpec := make([]float64, 1024)
+	for i := 0; i < 1024; i++ {
+		lSpec[i] = 10.0
+	}
+
+	cfg := &ISDecodeConfig{
+		ICSL:        icsL,
+		ICSR:        icsR,
+		FrameLength: 1024,
+	}
+
+	ISDecode(lSpec, rSpec, cfg)
+
+	// Check first group (windows 0-3): scale=1.0
+	for win := 0; win < 4; win++ {
+		base := win * 128
+		for i := 0; i < 4; i++ {
+			idx := base + i
+			if rSpec[idx] != 10.0 {
+				t.Errorf("rSpec[%d] (group 0, win=%d) = %v, want 10.0", idx, win, rSpec[idx])
+			}
+		}
+	}
+
+	// Check second group (windows 4-7): scale=0.5
+	for win := 4; win < 8; win++ {
+		base := win * 128
+		for i := 0; i < 4; i++ {
+			idx := base + i
+			if rSpec[idx] != 5.0 {
+				t.Errorf("rSpec[%d] (group 1, win=%d) = %v, want 5.0", idx, win, rSpec[idx])
+			}
+		}
+	}
+}
+
+func TestISDecode_SWBOffsetMaxClamping(t *testing.T) {
+	// Test that SFB bounds are clamped to SWBOffsetMax
+	icsL := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		NumSWB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	icsL.WindowGroupLength[0] = 1
+	icsL.SWBOffset[0] = 0
+	icsL.SWBOffset[1] = 100 // SFB would go to 100
+	icsL.SWBOffsetMax = 50  // But max is 50
+	icsL.SFBCB[0][0] = 1
+
+	icsR := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		NumSWB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	icsR.WindowGroupLength[0] = 1
+	icsR.SWBOffset[0] = 0
+	icsR.SWBOffset[1] = 100
+	icsR.SWBOffsetMax = 128
+	icsR.SFBCB[0][0] = uint8(huffman.IntensityHCB)
+	icsR.ScaleFactors[0][0] = 0 // scale = 1.0
+
+	lSpec := make([]float64, 100)
+	rSpec := make([]float64, 100)
+	for i := 0; i < 100; i++ {
+		lSpec[i] = 10.0
+	}
+
+	cfg := &ISDecodeConfig{
+		ICSL:        icsL,
+		ICSR:        icsR,
+		FrameLength: 1024,
+	}
+
+	ISDecode(lSpec, rSpec, cfg)
+
+	// First 50: IS applied
+	for i := 0; i < 50; i++ {
+		if rSpec[i] != 10.0 {
+			t.Errorf("rSpec[%d] = %v, want 10.0", i, rSpec[i])
+		}
+	}
+
+	// 50-99: Not touched (beyond SWBOffsetMax)
+	for i := 50; i < 100; i++ {
+		if rSpec[i] != 0.0 {
+			t.Errorf("rSpec[%d] = %v, want 0.0 (beyond SWBOffsetMax)", i, rSpec[i])
+		}
+	}
+}
+
+func TestISDecode_ScaleFactorClamping(t *testing.T) {
+	// FAAD2 clamps scale factor to [-120, 120]
+	// Test extreme values don't cause overflow
+	tests := []struct {
+		name        string
+		scaleFactor int16
+	}{
+		{"extreme negative", -200},
+		{"at min clamp", -120},
+		{"extreme positive", 200},
+		{"at max clamp", 120},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			icsL := &syntax.ICStream{
+				NumWindowGroups: 1,
+				MaxSFB:          1,
+				NumSWB:          1,
+				WindowSequence:  syntax.OnlyLongSequence,
+			}
+			icsL.WindowGroupLength[0] = 1
+			icsL.SWBOffset[0] = 0
+			icsL.SWBOffset[1] = 1
+			icsL.SWBOffsetMax = 1024
+			icsL.SFBCB[0][0] = 1
+
+			icsR := &syntax.ICStream{
+				NumWindowGroups: 1,
+				MaxSFB:          1,
+				NumSWB:          1,
+				WindowSequence:  syntax.OnlyLongSequence,
+			}
+			icsR.WindowGroupLength[0] = 1
+			icsR.SWBOffset[0] = 0
+			icsR.SWBOffset[1] = 1
+			icsR.SWBOffsetMax = 1024
+			icsR.SFBCB[0][0] = uint8(huffman.IntensityHCB)
+			icsR.ScaleFactors[0][0] = tc.scaleFactor
+
+			lSpec := []float64{1.0}
+			rSpec := make([]float64, 1)
+
+			cfg := &ISDecodeConfig{
+				ICSL:        icsL,
+				ICSR:        icsR,
+				FrameLength: 1024,
+			}
+
+			// Should not panic
+			ISDecode(lSpec, rSpec, cfg)
+
+			// Result should be finite (not Inf or NaN)
+			if math.IsInf(rSpec[0], 0) || math.IsNaN(rSpec[0]) {
+				t.Errorf("rSpec[0] = %v, expected finite value", rSpec[0])
+			}
+		})
+	}
+}
+
+func TestISDecode_MixedBands(t *testing.T) {
+	// Test that only IS bands are modified, others are untouched
+	icsL := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          3,
+		NumSWB:          3,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	icsL.WindowGroupLength[0] = 1
+	icsL.SWBOffset[0] = 0
+	icsL.SWBOffset[1] = 4
+	icsL.SWBOffset[2] = 8
+	icsL.SWBOffset[3] = 12
+	icsL.SWBOffsetMax = 1024
+	icsL.SFBCB[0][0] = 1
+	icsL.SFBCB[0][1] = 1
+	icsL.SFBCB[0][2] = 1
+
+	icsR := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          3,
+		NumSWB:          3,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	icsR.WindowGroupLength[0] = 1
+	icsR.SWBOffset[0] = 0
+	icsR.SWBOffset[1] = 4
+	icsR.SWBOffset[2] = 8
+	icsR.SWBOffset[3] = 12
+	icsR.SWBOffsetMax = 1024
+	icsR.SFBCB[0][0] = 1                           // Normal (not IS)
+	icsR.SFBCB[0][1] = uint8(huffman.IntensityHCB) // IS
+	icsR.SFBCB[0][2] = 1                           // Normal (not IS)
+	icsR.ScaleFactors[0][1] = 0                    // scale = 1.0
+
+	lSpec := make([]float64, 12)
+	rSpec := make([]float64, 12)
+	for i := 0; i < 12; i++ {
+		lSpec[i] = 10.0
+		rSpec[i] = 99.0 // Initial value for non-IS bands
+	}
+
+	cfg := &ISDecodeConfig{
+		ICSL:        icsL,
+		ICSR:        icsR,
+		FrameLength: 1024,
+	}
+
+	ISDecode(lSpec, rSpec, cfg)
+
+	// SFB 0 (0-3): Not IS, should be unchanged
+	for i := 0; i < 4; i++ {
+		if rSpec[i] != 99.0 {
+			t.Errorf("rSpec[%d] = %v, want 99.0 (non-IS band)", i, rSpec[i])
+		}
+	}
+
+	// SFB 1 (4-7): IS, should be copied from left
+	for i := 4; i < 8; i++ {
+		if rSpec[i] != 10.0 {
+			t.Errorf("rSpec[%d] = %v, want 10.0 (IS band)", i, rSpec[i])
+		}
+	}
+
+	// SFB 2 (8-11): Not IS, should be unchanged
+	for i := 8; i < 12; i++ {
+		if rSpec[i] != 99.0 {
+			t.Errorf("rSpec[%d] = %v, want 99.0 (non-IS band)", i, rSpec[i])
+		}
+	}
+}
