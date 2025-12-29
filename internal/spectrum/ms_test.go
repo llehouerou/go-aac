@@ -400,3 +400,66 @@ func TestMSDecode_ShortBlocks(t *testing.T) {
 		}
 	}
 }
+
+func TestMSDecode_SWBOffsetMaxClamping(t *testing.T) {
+	// Test that SFB bounds are clamped to SWBOffsetMax
+	icsL := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		NumSWB:          1,
+		MSMaskPresent:   2,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	icsL.WindowGroupLength[0] = 1
+	icsL.SWBOffset[0] = 0
+	icsL.SWBOffset[1] = 100 // SFB would go to 100
+	icsL.SWBOffsetMax = 50  // But max is 50
+	icsL.SFBCB[0][0] = 1
+
+	icsR := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		NumSWB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	icsR.WindowGroupLength[0] = 1
+	icsR.SWBOffset[0] = 0
+	icsR.SWBOffset[1] = 100
+	icsR.SFBCB[0][0] = 1
+
+	// Only first 50 coefficients should be modified
+	lSpec := make([]float64, 100)
+	rSpec := make([]float64, 100)
+	for i := 0; i < 100; i++ {
+		lSpec[i] = 10.0
+		rSpec[i] = 2.0
+	}
+
+	cfg := &MSDecodeConfig{
+		ICSL:        icsL,
+		ICSR:        icsR,
+		FrameLength: 1024,
+	}
+
+	MSDecode(lSpec, rSpec, cfg)
+
+	// First 50: M/S applied
+	for i := 0; i < 50; i++ {
+		if lSpec[i] != 12.0 {
+			t.Errorf("lSpec[%d] = %v, want 12.0", i, lSpec[i])
+		}
+		if rSpec[i] != 8.0 {
+			t.Errorf("rSpec[%d] = %v, want 8.0", i, rSpec[i])
+		}
+	}
+
+	// 50-99: Unchanged (beyond SWBOffsetMax)
+	for i := 50; i < 100; i++ {
+		if lSpec[i] != 10.0 {
+			t.Errorf("lSpec[%d] = %v, want 10.0 (beyond SWBOffsetMax)", i, lSpec[i])
+		}
+		if rSpec[i] != 2.0 {
+			t.Errorf("rSpec[%d] = %v, want 2.0 (beyond SWBOffsetMax)", i, rSpec[i])
+		}
+	}
+}
