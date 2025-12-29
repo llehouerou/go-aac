@@ -1,7 +1,12 @@
 // internal/spectrum/pns_test.go
 package spectrum
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/llehouerou/go-aac/internal/huffman"
+	"github.com/llehouerou/go-aac/internal/syntax"
+)
 
 func TestPNSState_InitialValues(t *testing.T) {
 	state := NewPNSState()
@@ -173,6 +178,121 @@ func TestGenRandVector_ScaleFactorClamping(t *testing.T) {
 	for i, v := range spec2 {
 		if v != v { // NaN check
 			t.Errorf("spec2[%d] is NaN", i)
+		}
+	}
+}
+
+func TestPNSDecode_NoNoiseBands(t *testing.T) {
+	// When no noise bands exist, spectra should be unchanged
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          2,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 4
+	ics.SWBOffset[2] = 8
+	ics.SWBOffsetMax = 1024
+	ics.SFBCB[0][0] = 1 // Normal codebook
+	ics.SFBCB[0][1] = 1 // Normal codebook
+
+	spec := []float64{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0}
+	original := make([]float64, len(spec))
+	copy(original, spec)
+
+	state := NewPNSState()
+	cfg := &PNSDecodeConfig{
+		ICSL:        ics,
+		FrameLength: 1024,
+	}
+
+	PNSDecode(spec, nil, state, cfg)
+
+	// Should be unchanged
+	for i := range spec {
+		if spec[i] != original[i] {
+			t.Errorf("spec[%d] = %v, want %v", i, spec[i], original[i])
+		}
+	}
+}
+
+func TestPNSDecode_SingleNoiseBand(t *testing.T) {
+	// One noise band should be filled with random values
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          2,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 4
+	ics.SWBOffset[2] = 8
+	ics.SWBOffsetMax = 1024
+	ics.SFBCB[0][0] = uint8(huffman.NoiseHCB) // Noise codebook
+	ics.SFBCB[0][1] = 1                       // Normal codebook
+	ics.ScaleFactors[0][0] = 0                // scale = 1.0
+
+	spec := make([]float64, 8)
+
+	state := NewPNSState()
+	cfg := &PNSDecodeConfig{
+		ICSL:        ics,
+		FrameLength: 1024,
+	}
+
+	PNSDecode(spec, nil, state, cfg)
+
+	// First SFB (0-3) should have noise (non-zero values)
+	allZero := true
+	for i := 0; i < 4; i++ {
+		if spec[i] != 0 {
+			allZero = false
+			break
+		}
+	}
+	if allZero {
+		t.Error("noise band should have non-zero values")
+	}
+
+	// Second SFB (4-7) should remain zero (not noise)
+	for i := 4; i < 8; i++ {
+		if spec[i] != 0 {
+			t.Errorf("spec[%d] = %v, want 0 (non-noise band)", i, spec[i])
+		}
+	}
+}
+
+func TestPNSDecode_DeterministicWithState(t *testing.T) {
+	// Same initial state should produce same noise
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 16
+	ics.SWBOffsetMax = 1024
+	ics.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+	ics.ScaleFactors[0][0] = 5
+
+	spec1 := make([]float64, 16)
+	spec2 := make([]float64, 16)
+
+	state1 := NewPNSState()
+	state2 := NewPNSState()
+
+	cfg := &PNSDecodeConfig{
+		ICSL:        ics,
+		FrameLength: 1024,
+	}
+
+	PNSDecode(spec1, nil, state1, cfg)
+	PNSDecode(spec2, nil, state2, cfg)
+
+	for i := range spec1 {
+		if spec1[i] != spec2[i] {
+			t.Errorf("spec[%d]: %v != %v", i, spec1[i], spec2[i])
 		}
 	}
 }

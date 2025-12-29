@@ -88,3 +88,85 @@ func genRandVector(spec []float64, scaleFactor int16, r1, r2 *uint32) {
 		}
 	}
 }
+
+// PNSDecode applies Perceptual Noise Substitution decoding.
+// For bands coded with NOISE_HCB, generates pseudo-random noise
+// scaled by the band's scale factor.
+//
+// For stereo (when specR != nil), handles noise correlation:
+//   - If both channels have PNS on the same band AND ms_used is set,
+//     the same noise is used for both channels (correlated).
+//   - Otherwise, independent noise is generated for each channel.
+//
+// Ported from: pns_decode() in ~/dev/faad2/libfaad/pns.c:150-270
+func PNSDecode(specL, specR []float64, state *PNSState, cfg *PNSDecodeConfig) {
+	icsL := cfg.ICSL
+	icsR := cfg.ICSR
+
+	nshort := cfg.FrameLength / 8
+	group := uint16(0)
+
+	for g := uint8(0); g < icsL.NumWindowGroups; g++ {
+		for b := uint8(0); b < icsL.WindowGroupLength[g]; b++ {
+			base := group * nshort
+
+			for sfb := uint8(0); sfb < icsL.MaxSFB; sfb++ {
+				// Save RNG state for potential right channel correlation
+				r1Dep := state.R1
+				r2Dep := state.R2
+
+				// Process left channel PNS
+				if IsNoiseICS(icsL, g, sfb) {
+					start := icsL.SWBOffset[sfb]
+					end := icsL.SWBOffset[sfb+1]
+					if start > icsL.SWBOffsetMax {
+						start = icsL.SWBOffsetMax
+					}
+					if end > icsL.SWBOffsetMax {
+						end = icsL.SWBOffsetMax
+					}
+
+					beginIdx := base + start
+					endIdx := base + end
+
+					if beginIdx < endIdx && int(endIdx) <= len(specL) {
+						genRandVector(specL[beginIdx:endIdx], icsL.ScaleFactors[g][sfb], &state.R1, &state.R2)
+					}
+				}
+
+				// Process right channel PNS (if present)
+				if icsR != nil && specR != nil && IsNoiseICS(icsR, g, sfb) {
+					start := icsR.SWBOffset[sfb]
+					end := icsR.SWBOffset[sfb+1]
+					if start > icsR.SWBOffsetMax {
+						start = icsR.SWBOffsetMax
+					}
+					if end > icsR.SWBOffsetMax {
+						end = icsR.SWBOffsetMax
+					}
+
+					beginIdx := base + start
+					endIdx := base + end
+
+					// Determine if noise should be correlated
+					// Correlated if: channel pair, both have PNS, and ms_used is set
+					useCorrelated := cfg.ChannelPair &&
+						IsNoiseICS(icsL, g, sfb) &&
+						((icsL.MSMaskPresent == 1 && icsL.MSUsed[g][sfb] != 0) ||
+							icsL.MSMaskPresent == 2)
+
+					if beginIdx < endIdx && int(endIdx) <= len(specR) {
+						if useCorrelated {
+							// Use the same RNG state as left channel (dependent)
+							genRandVector(specR[beginIdx:endIdx], icsR.ScaleFactors[g][sfb], &r1Dep, &r2Dep)
+						} else {
+							// Use independent RNG state
+							genRandVector(specR[beginIdx:endIdx], icsR.ScaleFactors[g][sfb], &state.R1, &state.R2)
+						}
+					}
+				}
+			}
+			group++
+		}
+	}
+}
