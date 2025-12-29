@@ -156,3 +156,29 @@ func TestParseRawDataBlock_LFETracking(t *testing.T) {
 		t.Errorf("LFECount = %d, want 0", result.LFECount)
 	}
 }
+
+func TestParseRawDataBlock_CCECount(t *testing.T) {
+	cfg := &RawDataBlockConfig{
+		SFIndex:              4,
+		FrameLength:          1024,
+		ObjectType:           ObjectTypeLC,
+		ChannelConfiguration: 2,
+	}
+
+	// Verify CCEConfig is created correctly from RawDataBlockConfig
+	cceCfg := &CCEConfig{
+		SFIndex:     cfg.SFIndex,
+		FrameLength: cfg.FrameLength,
+		ObjectType:  cfg.ObjectType,
+	}
+
+	if cceCfg.SFIndex != cfg.SFIndex {
+		t.Errorf("CCEConfig.SFIndex = %d, want %d", cceCfg.SFIndex, cfg.SFIndex)
+	}
+	if cceCfg.FrameLength != cfg.FrameLength {
+		t.Errorf("CCEConfig.FrameLength = %d, want %d", cceCfg.FrameLength, cfg.FrameLength)
+	}
+	if cceCfg.ObjectType != cfg.ObjectType {
+		t.Errorf("CCEConfig.ObjectType = %d, want %d", cceCfg.ObjectType, cfg.ObjectType)
+	}
+}

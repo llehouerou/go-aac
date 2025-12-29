@@ -127,7 +127,20 @@ func ParseRawDataBlock(r *bits.Reader, cfg *RawDataBlockConfig, drc *DRCInfo) (*
 			result.NumChannels++
 
 		case IDCCE:
-			// TODO: Parse CCE (Task 8)
+			// Parse Coupling Channel Element
+			// Ported from: coupling_channel_element() call in syntax.c:500
+			// CCE data is parsed but not used for decoding (rarely used)
+			cceCfg := &CCEConfig{
+				SFIndex:     cfg.SFIndex,
+				FrameLength: cfg.FrameLength,
+				ObjectType:  cfg.ObjectType,
+			}
+			cceResult, err := ParseCouplingChannelElement(r, cceCfg)
+			if err != nil {
+				return nil, err
+			}
+			result.CCEResults[result.CCECount] = cceResult
+			result.CCECount++
 
 		case IDDSE:
 			// Parse DSE (data is discarded)
