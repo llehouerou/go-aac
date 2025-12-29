@@ -181,3 +181,204 @@ func TestTNSDecodeCoef_ZeroCoefficients(t *testing.T) {
 		}
 	}
 }
+
+func TestTNSARFilter_Identity(t *testing.T) {
+	// When lpc = [1, 0, 0, ...], filter should be identity (y = x)
+	lpc := make([]float64, TNSMaxOrder+1)
+	lpc[0] = 1.0
+
+	input := []float64{1.0, 2.0, 3.0, 4.0, 5.0}
+	spec := make([]float64, len(input))
+	copy(spec, input)
+
+	tnsARFilter(spec, int16(len(spec)), 1, lpc, 0)
+
+	for i, want := range input {
+		if spec[i] != want {
+			t.Errorf("spec[%d]: got %v, want %v", i, spec[i], want)
+		}
+	}
+}
+
+func TestTNSARFilter_Order1(t *testing.T) {
+	// Simple first-order filter: y[n] = x[n] - 0.5*y[n-1]
+	lpc := make([]float64, TNSMaxOrder+1)
+	lpc[0] = 1.0
+	lpc[1] = 0.5
+
+	spec := []float64{1.0, 0.0, 0.0, 0.0, 0.0}
+
+	tnsARFilter(spec, int16(len(spec)), 1, lpc, 1)
+
+	// y[0] = 1.0 - 0.5*0 = 1.0
+	// y[1] = 0.0 - 0.5*1.0 = -0.5
+	// y[2] = 0.0 - 0.5*(-0.5) = 0.25
+	// y[3] = 0.0 - 0.5*0.25 = -0.125
+	// y[4] = 0.0 - 0.5*(-0.125) = 0.0625
+
+	expected := []float64{1.0, -0.5, 0.25, -0.125, 0.0625}
+	const tolerance = 1e-9
+
+	for i, want := range expected {
+		if math.Abs(spec[i]-want) > tolerance {
+			t.Errorf("spec[%d]: got %v, want %v", i, spec[i], want)
+		}
+	}
+}
+
+func TestTNSARFilter_Backward(t *testing.T) {
+	// Test backward filtering (inc = -1)
+	// In FAAD2, for backward filtering, the pointer starts at the last element
+	// and uses negative increment. In Go, we pass the full slice with a start offset.
+	lpc := make([]float64, TNSMaxOrder+1)
+	lpc[0] = 1.0
+	lpc[1] = 0.5
+
+	spec := []float64{0.0, 0.0, 0.0, 0.0, 1.0}
+
+	// For backward filtering, we pass startOffset=4 (last element index)
+	// The function will process from index 4 down to index 0
+	tnsARFilterWithOffset(spec, 4, 5, -1, lpc, 1)
+
+	// Should filter from end to start
+	// y[4] = 1.0 - 0.5*0 = 1.0
+	// y[3] = 0.0 - 0.5*1.0 = -0.5
+	// y[2] = 0.0 - 0.5*(-0.5) = 0.25
+	// etc.
+
+	expected := []float64{0.0625, -0.125, 0.25, -0.5, 1.0}
+	const tolerance = 1e-9
+
+	for i, want := range expected {
+		if math.Abs(spec[i]-want) > tolerance {
+			t.Errorf("spec[%d]: got %v, want %v", i, spec[i], want)
+		}
+	}
+}
+
+func TestTNSARFilter_Order2(t *testing.T) {
+	// Test second-order filter: y[n] = x[n] - 0.5*y[n-1] - 0.25*y[n-2]
+	lpc := make([]float64, TNSMaxOrder+1)
+	lpc[0] = 1.0
+	lpc[1] = 0.5
+	lpc[2] = 0.25
+
+	spec := []float64{1.0, 0.0, 0.0, 0.0}
+
+	tnsARFilter(spec, int16(len(spec)), 1, lpc, 2)
+
+	// y[0] = 1.0 - 0.5*0 - 0.25*0 = 1.0
+	// y[1] = 0.0 - 0.5*1.0 - 0.25*0 = -0.5
+	// y[2] = 0.0 - 0.5*(-0.5) - 0.25*1.0 = 0.25 - 0.25 = 0.0
+	// y[3] = 0.0 - 0.5*0.0 - 0.25*(-0.5) = 0.125
+
+	expected := []float64{1.0, -0.5, 0.0, 0.125}
+	const tolerance = 1e-9
+
+	for i, want := range expected {
+		if math.Abs(spec[i]-want) > tolerance {
+			t.Errorf("spec[%d]: got %v, want %v", i, spec[i], want)
+		}
+	}
+}
+
+func TestTNSARFilter_ZeroSize(t *testing.T) {
+	// Edge case: size=0 should do nothing
+	lpc := make([]float64, TNSMaxOrder+1)
+	lpc[0] = 1.0
+	lpc[1] = 0.5
+
+	spec := []float64{1.0, 2.0, 3.0}
+	original := make([]float64, len(spec))
+	copy(original, spec)
+
+	tnsARFilter(spec, 0, 1, lpc, 1)
+
+	for i, want := range original {
+		if spec[i] != want {
+			t.Errorf("spec[%d]: got %v, want %v (should be unchanged)", i, spec[i], want)
+		}
+	}
+}
+
+func TestTNSARFilter_ZeroOrder(t *testing.T) {
+	// Edge case: order=0 should do nothing (identity filter)
+	lpc := make([]float64, TNSMaxOrder+1)
+	lpc[0] = 1.0
+	lpc[1] = 0.5 // This should be ignored since order=0
+
+	spec := []float64{1.0, 2.0, 3.0}
+	original := make([]float64, len(spec))
+	copy(original, spec)
+
+	tnsARFilter(spec, int16(len(spec)), 1, lpc, 0)
+
+	for i, want := range original {
+		if spec[i] != want {
+			t.Errorf("spec[%d]: got %v, want %v (should be unchanged)", i, spec[i], want)
+		}
+	}
+}
+
+func TestTNSARFilter_HigherOrder(t *testing.T) {
+	// Test with order=5 to verify ringbuffer wraparound works
+	lpc := make([]float64, TNSMaxOrder+1)
+	lpc[0] = 1.0
+	for i := 1; i <= 5; i++ {
+		lpc[i] = 0.1 // Small coefficients
+	}
+
+	spec := make([]float64, 10)
+	spec[0] = 1.0 // Impulse
+
+	tnsARFilter(spec, int16(len(spec)), 1, lpc, 5)
+
+	// Just verify it runs without panic and produces non-trivial output
+	if spec[0] != 1.0 {
+		t.Errorf("spec[0]: got %v, want 1.0", spec[0])
+	}
+	// Later samples should be non-zero due to filter response
+	hasNonZero := false
+	for i := 1; i < len(spec); i++ {
+		if spec[i] != 0.0 {
+			hasNonZero = true
+			break
+		}
+	}
+	if !hasNonZero {
+		t.Error("Higher order filter should produce non-zero response")
+	}
+}
+
+func TestTNSARFilter_PartialSlice(t *testing.T) {
+	// Test filtering a portion of a larger spectrum
+	lpc := make([]float64, TNSMaxOrder+1)
+	lpc[0] = 1.0
+	lpc[1] = 0.5
+
+	// Full spectrum, but only filter middle portion
+	spec := []float64{100.0, 1.0, 0.0, 0.0, 200.0}
+
+	// Filter only elements 1-3 (3 samples starting at offset 1)
+	tnsARFilterWithOffset(spec, 1, 3, 1, lpc, 1)
+
+	// spec[0] and spec[4] should be unchanged
+	if spec[0] != 100.0 {
+		t.Errorf("spec[0]: got %v, want 100.0 (unchanged)", spec[0])
+	}
+	if spec[4] != 200.0 {
+		t.Errorf("spec[4]: got %v, want 200.0 (unchanged)", spec[4])
+	}
+
+	// Filtered portion: y[1] = 1.0, y[2] = 0 - 0.5*1 = -0.5, y[3] = 0 - 0.5*(-0.5) = 0.25
+	const tolerance = 1e-9
+	if math.Abs(spec[1]-1.0) > tolerance {
+		t.Errorf("spec[1]: got %v, want 1.0", spec[1])
+	}
+	if math.Abs(spec[2]-(-0.5)) > tolerance {
+		t.Errorf("spec[2]: got %v, want -0.5", spec[2])
+	}
+	if math.Abs(spec[3]-0.25) > tolerance {
+		t.Errorf("spec[3]: got %v, want 0.25", spec[3])
+	}
+}
