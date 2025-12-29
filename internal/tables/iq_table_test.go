@@ -134,6 +134,13 @@ func TestPow2FracTable(t *testing.T) {
 	}
 }
 
+func TestScaleFactorOffset(t *testing.T) {
+	// From FAAD2: scale factor must be offset by 100 before computing exponent
+	if ScaleFactorOffset != 100 {
+		t.Errorf("ScaleFactorOffset = %d, want 100", ScaleFactorOffset)
+	}
+}
+
 func TestIQuant(t *testing.T) {
 	tests := []struct {
 		name     string

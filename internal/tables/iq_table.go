@@ -12,6 +12,12 @@ var ErrIQTableOverflow = errors.New("tables: inverse quantization value out of r
 // Ported from: IQ_TABLE_SIZE in ~/dev/faad2/libfaad/iq_table.h:44
 const IQTableSize = 8192
 
+// ScaleFactorOffset is subtracted from scale factors before computing the exponent.
+// Formula: spec[i] *= 2^((sf - ScaleFactorOffset) / 4)
+//
+// Ported from: specrec.c:595 "scale_factor -= 100"
+const ScaleFactorOffset = 100
+
 // IQTable contains precomputed values of i^(4/3) for i in 0..8191.
 // Used for inverse quantization: spec[i] = sign(quant[i]) * IQTable[|quant[i]|]
 //
