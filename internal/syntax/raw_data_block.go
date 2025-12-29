@@ -11,6 +11,8 @@
 // Ported from: ~/dev/faad2/libfaad/syntax.c:449-648
 package syntax
 
+import "github.com/llehouerou/go-aac/internal/bits"
+
 // RawDataBlockConfig holds configuration for raw data block parsing.
 // Ported from: raw_data_block() parameters in ~/dev/faad2/libfaad/syntax.c:449-450
 type RawDataBlockConfig struct {
@@ -42,4 +44,84 @@ type RawDataBlockResult struct {
 	// DRC info is updated in place (passed by reference)
 	// PCE is returned separately if present
 	PCE *ProgramConfig
+}
+
+// ParseRawDataBlock parses a raw_data_block() from the bitstream.
+// This is the main entry point for parsing AAC frame data.
+//
+// The function reads syntax elements in a loop until ID_END (0x7) is
+// encountered. Each element is parsed by its respective parser and
+// the results are collected in RawDataBlockResult.
+//
+// Ported from: raw_data_block() in ~/dev/faad2/libfaad/syntax.c:449-648
+func ParseRawDataBlock(r *bits.Reader, cfg *RawDataBlockConfig, drc *DRCInfo) (*RawDataBlockResult, error) {
+	result := &RawDataBlockResult{
+		FirstElement: InvalidElementID,
+	}
+
+	// Main parsing loop
+	// Ported from: syntax.c:465-544
+	for {
+		// Read element ID (3 bits)
+		idSynEle := ElementID(r.GetBits(LenSEID))
+
+		if idSynEle == IDEND {
+			break
+		}
+
+		// Track elements
+		result.NumElements++
+		if result.FirstElement == InvalidElementID {
+			result.FirstElement = idSynEle
+		}
+
+		switch idSynEle {
+		case IDSCE:
+			// TODO: Parse SCE (Task 5)
+
+		case IDCPE:
+			// TODO: Parse CPE (Task 6)
+
+		case IDLFE:
+			// TODO: Parse LFE (Task 7)
+
+		case IDCCE:
+			// TODO: Parse CCE (Task 8)
+
+		case IDDSE:
+			// Parse DSE (data is discarded)
+			_ = ParseDataStreamElement(r)
+
+		case IDPCE:
+			// PCE must be first element
+			if result.NumElements != 1 {
+				return nil, ErrPCENotFirst
+			}
+			pce, err := ParsePCE(r)
+			if err != nil {
+				return nil, err
+			}
+			result.PCE = pce
+
+		case IDFIL:
+			// Parse fill element
+			if err := ParseFillElement(r, drc); err != nil {
+				return nil, err
+			}
+
+		default:
+			return nil, ErrUnknownElement
+		}
+
+		// Check for bitstream errors
+		if r.Error() {
+			return nil, ErrBitstreamError
+		}
+	}
+
+	// Byte align after parsing
+	// Ported from: syntax.c:644
+	r.ByteAlign()
+
+	return result, nil
 }

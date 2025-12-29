@@ -1,7 +1,11 @@
 // internal/syntax/raw_data_block_test.go
 package syntax
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/llehouerou/go-aac/internal/bits"
+)
 
 func TestRawDataBlockConfig_Fields(t *testing.T) {
 	cfg := &RawDataBlockConfig{
@@ -56,5 +60,33 @@ func TestRawDataBlockResult_ElementCapacity(t *testing.T) {
 	}
 	if len(result.CPEResults) != MaxSyntaxElements {
 		t.Errorf("CPEResults capacity = %d, want %d", len(result.CPEResults), MaxSyntaxElements)
+	}
+}
+
+func TestParseRawDataBlock_EmptyFrame(t *testing.T) {
+	// A frame with only ID_END (0x7 = 0b111)
+	// Bits: 111 (ID_END)
+	// Padded to byte: 11100000 = 0xE0
+	data := []byte{0xE0}
+	r := bits.NewReader(data)
+
+	cfg := &RawDataBlockConfig{
+		SFIndex:              4,
+		FrameLength:          1024,
+		ObjectType:           ObjectTypeLC,
+		ChannelConfiguration: 2,
+	}
+	drc := &DRCInfo{}
+
+	result, err := ParseRawDataBlock(r, cfg, drc)
+	if err != nil {
+		t.Fatalf("ParseRawDataBlock() error = %v", err)
+	}
+
+	if result.NumChannels != 0 {
+		t.Errorf("NumChannels = %d, want 0", result.NumChannels)
+	}
+	if result.NumElements != 0 {
+		t.Errorf("NumElements = %d, want 0", result.NumElements)
 	}
 }
