@@ -59,6 +59,10 @@ var (
 
 	// ErrPulseInShortBlock indicates pulse coding is not allowed in short blocks.
 	ErrPulseInShortBlock = errors.New("syntax: pulse coding not allowed in short blocks")
+
+	// ErrPulsePosition indicates pulse position exceeds frame length.
+	// FAAD2 error code: 15
+	ErrPulsePosition = errors.New("syntax: pulse position exceeds frame length")
 )
 
 // Gain control errors.
