@@ -54,3 +54,38 @@ func realToInt16(sigIn float64) int16 {
 	}
 	return int16(rounded)
 }
+
+// LTPUpdateState updates the LTP state buffer with the latest decoded samples.
+// This must be called after each frame is decoded to maintain the prediction state.
+//
+// The state buffer layout is:
+//   - Non-LD: [old_half | time_samples | overlap_samples | zeros]
+//   - LD: [extra_512 | old_half | time_samples | overlap_samples]
+//
+// Parameters:
+//   - ltPredStat: LTP state buffer (4*frameLen samples for LTP, or 4*512 for LD)
+//   - time: decoded time-domain samples for current frame
+//   - overlap: overlap samples from filter bank
+//   - frameLen: frame length (1024 or 960)
+//   - objectType: AAC object type
+//
+// Ported from: lt_update_state() in ~/dev/faad2/libfaad/lt_predict.c:173-213
+func LTPUpdateState(ltPredStat []int16, time, overlap []float64, frameLen uint16, objectType aac.ObjectType) {
+	if objectType == aac.ObjectTypeLD {
+		// LD mode: extra 512 samples lookback
+		for i := uint16(0); i < frameLen; i++ {
+			ltPredStat[i] = ltPredStat[i+frameLen]             // Shift down
+			ltPredStat[frameLen+i] = ltPredStat[i+2*frameLen]  // Shift down
+			ltPredStat[2*frameLen+i] = realToInt16(time[i])    // New time samples
+			ltPredStat[3*frameLen+i] = realToInt16(overlap[i]) // New overlap samples
+		}
+	} else {
+		// Non-LD mode (LTP, etc.)
+		for i := uint16(0); i < frameLen; i++ {
+			ltPredStat[i] = ltPredStat[i+frameLen]             // Shift down
+			ltPredStat[frameLen+i] = realToInt16(time[i])      // New time samples
+			ltPredStat[2*frameLen+i] = realToInt16(overlap[i]) // New overlap samples
+			// ltPredStat[3*frameLen+i] stays zero (initialized once)
+		}
+	}
+}

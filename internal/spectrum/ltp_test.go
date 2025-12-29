@@ -85,3 +85,126 @@ func TestRealToInt16(t *testing.T) {
 		})
 	}
 }
+
+func TestLTPUpdateState_NonLD(t *testing.T) {
+	// Test state update for non-LD object types (LC, LTP, etc.)
+	frameLen := uint16(8) // Small for testing
+
+	// State buffer: 4*frameLen = 32 samples
+	// Layout: [old_half | time_samples | overlap_samples | zeros]
+	state := make([]int16, 4*frameLen)
+
+	// Initialize with some values
+	for i := range state {
+		state[i] = int16(i + 100)
+	}
+
+	// Time domain samples (current frame output)
+	time := make([]float64, frameLen)
+	for i := range time {
+		time[i] = float64(i * 10)
+	}
+
+	// Overlap samples from filter bank
+	overlap := make([]float64, frameLen)
+	for i := range overlap {
+		overlap[i] = float64(i * 20)
+	}
+
+	LTPUpdateState(state, time, overlap, frameLen, aac.ObjectTypeLTP)
+
+	// Expected layout after update:
+	// [0..7] = old state[8..15]
+	// [8..15] = realToInt16(time[0..7])
+	// [16..23] = realToInt16(overlap[0..7])
+	// [24..31] = unchanged (zeros initialized at start)
+
+	// Check shifted values
+	for i := uint16(0); i < frameLen; i++ {
+		expected := int16(i + 100 + 8) // Original state[i+8]
+		if state[i] != expected {
+			t.Errorf("state[%d] = %d, want %d (shifted)", i, state[i], expected)
+		}
+	}
+
+	// Check time values
+	for i := uint16(0); i < frameLen; i++ {
+		expected := realToInt16(float64(i * 10))
+		if state[frameLen+i] != expected {
+			t.Errorf("state[%d] = %d, want %d (time)", frameLen+i, state[frameLen+i], expected)
+		}
+	}
+
+	// Check overlap values
+	for i := uint16(0); i < frameLen; i++ {
+		expected := realToInt16(float64(i * 20))
+		if state[2*frameLen+i] != expected {
+			t.Errorf("state[%d] = %d, want %d (overlap)", 2*frameLen+i, state[2*frameLen+i], expected)
+		}
+	}
+}
+
+func TestLTPUpdateState_LD(t *testing.T) {
+	// Test state update for LD object type (extra 512 lookback)
+	frameLen := uint16(8) // Small for testing
+
+	// State buffer: 4*frameLen = 32 samples
+	state := make([]int16, 4*frameLen)
+
+	// Initialize with some values
+	for i := range state {
+		state[i] = int16(i + 100)
+	}
+
+	// Time domain samples
+	time := make([]float64, frameLen)
+	for i := range time {
+		time[i] = float64(i * 10)
+	}
+
+	// Overlap samples
+	overlap := make([]float64, frameLen)
+	for i := range overlap {
+		overlap[i] = float64(i * 20)
+	}
+
+	LTPUpdateState(state, time, overlap, frameLen, aac.ObjectTypeLD)
+
+	// Expected layout after update (LD mode):
+	// [0..7] = old state[8..15]
+	// [8..15] = old state[16..23]
+	// [16..23] = realToInt16(time[0..7])
+	// [24..31] = realToInt16(overlap[0..7])
+
+	// Check first shift
+	for i := uint16(0); i < frameLen; i++ {
+		expected := int16(i + 100 + 8) // Original state[i+8]
+		if state[i] != expected {
+			t.Errorf("state[%d] = %d, want %d (first shift)", i, state[i], expected)
+		}
+	}
+
+	// Check second shift
+	for i := uint16(0); i < frameLen; i++ {
+		expected := int16(i + 100 + 16) // Original state[i+16]
+		if state[frameLen+i] != expected {
+			t.Errorf("state[%d] = %d, want %d (second shift)", frameLen+i, state[frameLen+i], expected)
+		}
+	}
+
+	// Check time values
+	for i := uint16(0); i < frameLen; i++ {
+		expected := realToInt16(float64(i * 10))
+		if state[2*frameLen+i] != expected {
+			t.Errorf("state[%d] = %d, want %d (time)", 2*frameLen+i, state[2*frameLen+i], expected)
+		}
+	}
+
+	// Check overlap values
+	for i := uint16(0); i < frameLen; i++ {
+		expected := realToInt16(float64(i * 20))
+		if state[3*frameLen+i] != expected {
+			t.Errorf("state[%d] = %d, want %d (overlap)", 3*frameLen+i, state[3*frameLen+i], expected)
+		}
+	}
+}
