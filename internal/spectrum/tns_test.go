@@ -941,3 +941,29 @@ func TestTNSMAFilter_ZeroSize(t *testing.T) {
 		}
 	}
 }
+
+func TestTNSEncodeFrame_NoTNSData(t *testing.T) {
+	spec := []float64{1.0, 2.0, 3.0, 4.0, 5.0}
+	original := make([]float64, len(spec))
+	copy(original, spec)
+
+	ics := &syntax.ICStream{
+		TNSDataPresent: false,
+	}
+
+	cfg := &TNSDecodeConfig{
+		ICS:         ics,
+		SRIndex:     4, // 44100 Hz
+		ObjectType:  aac.ObjectTypeLC,
+		FrameLength: 1024,
+	}
+
+	TNSEncodeFrame(spec, cfg)
+
+	// No TNS data - spectrum should be unchanged
+	for i := range spec {
+		if spec[i] != original[i] {
+			t.Errorf("sample %d modified without TNS data: got %v, want %v", i, spec[i], original[i])
+		}
+	}
+}

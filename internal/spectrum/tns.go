@@ -196,6 +196,102 @@ type TNSDecodeConfig struct {
 	FrameLength uint16
 }
 
+// TNSEncodeFrame applies TNS encoding to one channel.
+// This applies the MA (all-zero) filter to the spectrum, which is the
+// inverse operation of TNS decoding. Used by LTP to match TNS processing.
+//
+// Ported from: tns_encode_frame() in ~/dev/faad2/libfaad/tns.c:139-191
+func TNSEncodeFrame(spec []float64, cfg *TNSDecodeConfig) {
+	ics := cfg.ICS
+
+	if !ics.TNSDataPresent {
+		return
+	}
+
+	tns := &ics.TNS
+	nshort := cfg.FrameLength / 8
+	isShort := ics.WindowSequence == syntax.EightShortSequence
+
+	lpc := make([]float64, TNSMaxOrder+1)
+
+	for w := uint8(0); w < ics.NumWindows; w++ {
+		bottom := ics.NumSWB
+
+		for f := uint8(0); f < tns.NFilt[w]; f++ {
+			top := bottom
+			// Compute bottom, ensuring non-negative
+			if tns.Length[w][f] > top {
+				bottom = 0
+			} else {
+				bottom = top - tns.Length[w][f]
+			}
+
+			// Clamp order to TNSMaxOrder
+			tnsOrder := tns.Order[w][f]
+			if tnsOrder > TNSMaxOrder {
+				tnsOrder = TNSMaxOrder
+			}
+			if tnsOrder == 0 {
+				continue
+			}
+
+			// Decode LPC coefficients
+			tnsDecodeCoef(tnsOrder, tns.CoefRes[w], tns.CoefCompress[w][f], tns.Coef[w][f][:], lpc)
+
+			// Calculate filter region bounds
+			maxTNS := tables.MaxTNSSFB(cfg.SRIndex, cfg.ObjectType, isShort)
+
+			// Start position
+			start := bottom
+			if start > maxTNS {
+				start = maxTNS
+			}
+			if start > ics.MaxSFB {
+				start = ics.MaxSFB
+			}
+			startSample := ics.SWBOffset[start]
+			if startSample > ics.SWBOffsetMax {
+				startSample = ics.SWBOffsetMax
+			}
+
+			// End position
+			end := top
+			if end > maxTNS {
+				end = maxTNS
+			}
+			if end > ics.MaxSFB {
+				end = ics.MaxSFB
+			}
+			endSample := ics.SWBOffset[end]
+			if endSample > ics.SWBOffsetMax {
+				endSample = ics.SWBOffsetMax
+			}
+
+			size := int16(endSample) - int16(startSample)
+			if size <= 0 {
+				continue
+			}
+
+			// Determine filter direction and starting position
+			var inc int8
+			var filterStart uint16
+			if tns.Direction[w][f] != 0 {
+				// Backward filtering
+				inc = -1
+				filterStart = endSample - 1
+			} else {
+				// Forward filtering
+				inc = 1
+				filterStart = startSample
+			}
+
+			// Apply the MA filter (encoding, not decoding)
+			windowOffset := uint16(w) * nshort
+			tnsMAFilterWithOffset(spec, int(windowOffset+filterStart), size, inc, lpc, tnsOrder)
+		}
+	}
+}
+
 // TNSDecodeFrame applies TNS (Temporal Noise Shaping) decoding to one channel.
 // TNS applies all-pole IIR filters to spectral coefficients to shape
 // the temporal envelope of quantization noise.
