@@ -49,6 +49,17 @@ var Pow2SFTable = [64]float64{
 	68719476736.0, 137438953472.0, 274877906944.0,
 }
 
+// Pow2FracTable contains 2^(i/4) for i in {0,1,2,3}.
+// Used for fractional part of scale factor exponent.
+//
+// Ported from: pow2_table in ~/dev/faad2/libfaad/specrec.c:553-559
+var Pow2FracTable = [4]float64{
+	1.0,                               // 2^0
+	1.1892071150027210667174999705605, // 2^0.25
+	1.4142135623730950488016887242097, // 2^0.5
+	1.6817928305074290860622509524664, // 2^0.75
+}
+
 // IQuant performs inverse quantization: returns sign(q) * |q|^(4/3).
 // Uses the precomputed IQTable for efficiency.
 //

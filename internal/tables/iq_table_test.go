@@ -118,6 +118,22 @@ func TestPow2SFTable_Values(t *testing.T) {
 	}
 }
 
+func TestPow2FracTable(t *testing.T) {
+	// Expected values from FAAD2 specrec.c:553-559
+	expected := [4]float64{
+		1.0,                               // 2^0
+		1.1892071150027210667174999705605, // 2^0.25
+		1.4142135623730950488016887242097, // 2^0.5
+		1.6817928305074290860622509524664, // 2^0.75
+	}
+
+	for i, exp := range expected {
+		if Pow2FracTable[i] != exp {
+			t.Errorf("Pow2FracTable[%d] = %v, want %v", i, Pow2FracTable[i], exp)
+		}
+	}
+}
+
 func TestIQuant(t *testing.T) {
 	tests := []struct {
 		name     string
