@@ -111,42 +111,44 @@ func PNSDecode(specL, specR []float64, state *PNSState, cfg *PNSDecodeConfig) {
 			base := group * nshort
 
 			for sfb := uint8(0); sfb < icsL.MaxSFB; sfb++ {
-				// Save RNG state for potential right channel correlation
-				r1Dep := state.R1
-				r2Dep := state.R2
+				// RNG state for potential right channel correlation
+				// Captured inside left channel block, per FAAD2 pns.c:209-210
+				var r1Dep, r2Dep uint32
 
 				// Process left channel PNS
 				if IsNoiseICS(icsL, g, sfb) {
-					start := icsL.SWBOffset[sfb]
-					end := icsL.SWBOffset[sfb+1]
-					if start > icsL.SWBOffsetMax {
-						start = icsL.SWBOffsetMax
+					// Clamp the final index (base + offset), not the offset alone
+					// Per FAAD2 pns.c:206-207
+					beginIdx := base + icsL.SWBOffset[sfb]
+					endIdx := base + icsL.SWBOffset[sfb+1]
+					if beginIdx > icsL.SWBOffsetMax {
+						beginIdx = icsL.SWBOffsetMax
 					}
-					if end > icsL.SWBOffsetMax {
-						end = icsL.SWBOffsetMax
+					if endIdx > icsL.SWBOffsetMax {
+						endIdx = icsL.SWBOffsetMax
 					}
-
-					beginIdx := base + start
-					endIdx := base + end
 
 					if beginIdx < endIdx && int(endIdx) <= len(specL) {
+						// Capture RNG state for potential right channel correlation
+						// This must happen inside the left noise block, per FAAD2 pns.c:209-210
+						r1Dep = state.R1
+						r2Dep = state.R2
 						genRandVector(specL[beginIdx:endIdx], icsL.ScaleFactors[g][sfb], &state.R1, &state.R2)
 					}
 				}
 
 				// Process right channel PNS (if present)
 				if icsR != nil && specR != nil && IsNoiseICS(icsR, g, sfb) {
-					start := icsR.SWBOffset[sfb]
-					end := icsR.SWBOffset[sfb+1]
-					if start > icsR.SWBOffsetMax {
-						start = icsR.SWBOffsetMax
+					// Clamp the final index (base + offset), not the offset alone
+					// Per FAAD2 pns.c:250-251, 258-259
+					beginIdx := base + icsR.SWBOffset[sfb]
+					endIdx := base + icsR.SWBOffset[sfb+1]
+					if beginIdx > icsR.SWBOffsetMax {
+						beginIdx = icsR.SWBOffsetMax
 					}
-					if end > icsR.SWBOffsetMax {
-						end = icsR.SWBOffsetMax
+					if endIdx > icsR.SWBOffsetMax {
+						endIdx = icsR.SWBOffsetMax
 					}
-
-					beginIdx := base + start
-					endIdx := base + end
 
 					// Determine if noise should be correlated
 					// Correlated if: channel pair, both have PNS, and ms_used is set
