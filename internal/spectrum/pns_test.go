@@ -2,6 +2,8 @@
 package spectrum
 
 import (
+	"fmt"
+	"math"
 	"testing"
 
 	"github.com/llehouerou/go-aac/internal/huffman"
@@ -623,5 +625,150 @@ func TestPNSDecode_MixedGroups(t *testing.T) {
 				t.Errorf("spec[%d] (group 1) = %v, want 99.0", base+i, spec[base+i])
 			}
 		}
+	}
+}
+
+func TestPNSDecode_EmptyBand(t *testing.T) {
+	// Band with start == end (zero width)
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 0 // Zero-width band
+	ics.SWBOffsetMax = 1024
+	ics.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+	ics.ScaleFactors[0][0] = 0
+
+	spec := make([]float64, 16)
+
+	state := NewPNSState()
+	cfg := &PNSDecodeConfig{
+		ICSL:        ics,
+		FrameLength: 1024,
+	}
+
+	// Should not panic
+	PNSDecode(spec, nil, state, cfg)
+}
+
+func TestPNSDecode_ClampedToSWBOffsetMax(t *testing.T) {
+	// Band extends beyond SWBOffsetMax
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 100 // Would go to 100
+	ics.SWBOffsetMax = 50  // But clamped to 50
+	ics.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+	ics.ScaleFactors[0][0] = 0
+
+	spec := make([]float64, 100)
+	for i := 50; i < 100; i++ {
+		spec[i] = 99.0
+	}
+
+	state := NewPNSState()
+	cfg := &PNSDecodeConfig{
+		ICSL:        ics,
+		FrameLength: 1024,
+	}
+
+	PNSDecode(spec, nil, state, cfg)
+
+	// 0-49: should have noise
+	for i := 0; i < 50; i++ {
+		if spec[i] == 0 || spec[i] == 99.0 {
+			t.Errorf("spec[%d] = %v, expected noise", i, spec[i])
+		}
+	}
+
+	// 50-99: should be unchanged
+	for i := 50; i < 100; i++ {
+		if spec[i] != 99.0 {
+			t.Errorf("spec[%d] = %v, want 99.0", i, spec[i])
+		}
+	}
+}
+
+func TestPNSDecode_ExtremeScaleFactors(t *testing.T) {
+	// Test with extreme scale factors
+	tests := []int16{-120, -60, 0, 60, 120}
+
+	for _, sf := range tests {
+		t.Run(fmt.Sprintf("sf=%d", sf), func(t *testing.T) {
+			ics := &syntax.ICStream{
+				NumWindowGroups: 1,
+				MaxSFB:          1,
+				WindowSequence:  syntax.OnlyLongSequence,
+			}
+			ics.WindowGroupLength[0] = 1
+			ics.SWBOffset[0] = 0
+			ics.SWBOffset[1] = 16
+			ics.SWBOffsetMax = 1024
+			ics.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+			ics.ScaleFactors[0][0] = sf
+
+			spec := make([]float64, 16)
+
+			state := NewPNSState()
+			cfg := &PNSDecodeConfig{
+				ICSL:        ics,
+				FrameLength: 1024,
+			}
+
+			PNSDecode(spec, nil, state, cfg)
+
+			// Should produce finite values
+			for i, v := range spec {
+				if math.IsInf(v, 0) || math.IsNaN(v) {
+					t.Errorf("spec[%d] = %v, expected finite", i, v)
+				}
+			}
+		})
+	}
+}
+
+func TestPNSDecode_StatePreservedAcrossCalls(t *testing.T) {
+	// RNG state should advance between calls
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 8
+	ics.SWBOffsetMax = 1024
+	ics.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+	ics.ScaleFactors[0][0] = 0
+
+	spec1 := make([]float64, 8)
+	spec2 := make([]float64, 8)
+
+	state := NewPNSState()
+	cfg := &PNSDecodeConfig{
+		ICSL:        ics,
+		FrameLength: 1024,
+	}
+
+	PNSDecode(spec1, nil, state, cfg)
+	PNSDecode(spec2, nil, state, cfg)
+
+	// Second call should produce different noise
+	allSame := true
+	for i := range spec1 {
+		if spec1[i] != spec2[i] {
+			allSame = false
+			break
+		}
+	}
+	if allSame {
+		t.Error("consecutive calls should produce different noise")
 	}
 }
