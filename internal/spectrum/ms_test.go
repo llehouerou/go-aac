@@ -323,3 +323,80 @@ func TestMSDecode_SkipsNoiseBands(t *testing.T) {
 		}
 	}
 }
+
+func TestMSDecode_ShortBlocks(t *testing.T) {
+	// Test 8 short windows grouped into 2 groups of 4
+	icsL := &syntax.ICStream{
+		NumWindowGroups: 2,
+		NumWindows:      8,
+		MaxSFB:          1,
+		NumSWB:          1,
+		MSMaskPresent:   2,
+		WindowSequence:  syntax.EightShortSequence,
+	}
+	icsL.WindowGroupLength[0] = 4 // First group: 4 windows
+	icsL.WindowGroupLength[1] = 4 // Second group: 4 windows
+	icsL.SWBOffset[0] = 0
+	icsL.SWBOffset[1] = 4 // 4 coefficients per SFB per window
+	icsL.SWBOffsetMax = 128
+	icsL.SFBCB[0][0] = 1
+	icsL.SFBCB[1][0] = 1
+
+	icsR := &syntax.ICStream{
+		NumWindowGroups: 2,
+		NumWindows:      8,
+		MaxSFB:          1,
+		NumSWB:          1,
+		WindowSequence:  syntax.EightShortSequence,
+	}
+	icsR.WindowGroupLength[0] = 4
+	icsR.WindowGroupLength[1] = 4
+	icsR.SWBOffset[0] = 0
+	icsR.SWBOffset[1] = 4
+	icsR.SFBCB[0][0] = 1
+	icsR.SFBCB[1][0] = 1
+
+	// FrameLength=1024, nshort=128
+	// Full spectrum: 8 windows * 128 coefficients = 1024 total
+	// SFB covers only first 4 coefficients of each window
+	lSpec := make([]float64, 1024)
+	rSpec := make([]float64, 1024)
+	for i := 0; i < 1024; i++ {
+		lSpec[i] = 10.0
+		rSpec[i] = 2.0
+	}
+
+	cfg := &MSDecodeConfig{
+		ICSL:        icsL,
+		ICSR:        icsR,
+		FrameLength: 1024,
+	}
+
+	MSDecode(lSpec, rSpec, cfg)
+
+	// Check coefficients for each of the 8 windows
+	// Each window starts at offset group*128, and we process indices 0-3
+	for win := 0; win < 8; win++ {
+		base := win * 128
+		// First 4 coefficients of each window should be transformed: L=12, R=8
+		for i := 0; i < 4; i++ {
+			idx := base + i
+			if lSpec[idx] != 12.0 {
+				t.Errorf("lSpec[%d] (win=%d, i=%d) = %v, want 12.0", idx, win, i, lSpec[idx])
+			}
+			if rSpec[idx] != 8.0 {
+				t.Errorf("rSpec[%d] (win=%d, i=%d) = %v, want 8.0", idx, win, i, rSpec[idx])
+			}
+		}
+		// Remaining coefficients (4-127) should be unchanged
+		for i := 4; i < 128; i++ {
+			idx := base + i
+			if lSpec[idx] != 10.0 {
+				t.Errorf("lSpec[%d] (win=%d, i=%d) = %v, want 10.0 (unchanged)", idx, win, i, lSpec[idx])
+			}
+			if rSpec[idx] != 2.0 {
+				t.Errorf("rSpec[%d] (win=%d, i=%d) = %v, want 2.0 (unchanged)", idx, win, i, rSpec[idx])
+			}
+		}
+	}
+}
