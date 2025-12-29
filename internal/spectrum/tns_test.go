@@ -4,6 +4,9 @@ package spectrum
 import (
 	"math"
 	"testing"
+
+	"github.com/llehouerou/go-aac"
+	"github.com/llehouerou/go-aac/internal/syntax"
 )
 
 func TestTNSDecodeCoef_Order1(t *testing.T) {
@@ -380,5 +383,136 @@ func TestTNSARFilter_PartialSlice(t *testing.T) {
 	}
 	if math.Abs(spec[3]-0.25) > tolerance {
 		t.Errorf("spec[3]: got %v, want 0.25", spec[3])
+	}
+}
+
+func TestTNSDecodeFrame_NoTNSData(t *testing.T) {
+	// When tns_data_present is false, spectrum should be unchanged
+	ics := &syntax.ICStream{
+		TNSDataPresent: false,
+	}
+
+	original := []float64{1.0, 2.0, 3.0, 4.0}
+	spec := make([]float64, len(original))
+	copy(spec, original)
+
+	cfg := &TNSDecodeConfig{
+		ICS:         ics,
+		SRIndex:     4, // 44100 Hz
+		ObjectType:  aac.ObjectTypeLC,
+		FrameLength: 1024,
+	}
+
+	TNSDecodeFrame(spec, cfg)
+
+	for i, want := range original {
+		if spec[i] != want {
+			t.Errorf("spec[%d]: got %v, want %v (should be unchanged)", i, spec[i], want)
+		}
+	}
+}
+
+func TestTNSDecodeFrame_SingleFilter(t *testing.T) {
+	// Test with a single TNS filter on long block
+	ics := &syntax.ICStream{
+		TNSDataPresent:    true,
+		NumWindows:        1,
+		NumWindowGroups:   1,
+		WindowSequence:    syntax.OnlyLongSequence,
+		NumSWB:            49,
+		MaxSFB:            49,
+		SWBOffsetMax:      1024,
+		WindowGroupLength: [8]uint8{1},
+	}
+
+	// Set up SWB offsets (simplified - just use linear)
+	for i := 0; i < 52; i++ {
+		ics.SWBOffset[i] = uint16(i * 20)
+		if ics.SWBOffset[i] > 1024 {
+			ics.SWBOffset[i] = 1024
+		}
+	}
+
+	// Set up TNS filter
+	ics.TNS.NFilt[0] = 1
+	ics.TNS.CoefRes[0] = 0      // 3-bit coefficients
+	ics.TNS.Length[0][0] = 20   // Filter spans 20 SFBs
+	ics.TNS.Order[0][0] = 1     // First-order filter
+	ics.TNS.Direction[0][0] = 0 // Forward
+	ics.TNS.CoefCompress[0][0] = 0
+	ics.TNS.Coef[0][0][0] = 0 // Index 0 = coefficient 0.0
+
+	spec := make([]float64, 1024)
+	for i := range spec {
+		spec[i] = 1.0
+	}
+
+	cfg := &TNSDecodeConfig{
+		ICS:         ics,
+		SRIndex:     4, // 44100 Hz
+		ObjectType:  aac.ObjectTypeLC,
+		FrameLength: 1024,
+	}
+
+	TNSDecodeFrame(spec, cfg)
+
+	// With coefficient 0.0, filter should be identity (no change)
+	// Just verify it doesn't crash and runs
+	for i := range spec {
+		if math.IsNaN(spec[i]) || math.IsInf(spec[i], 0) {
+			t.Errorf("spec[%d] is invalid: %v", i, spec[i])
+		}
+	}
+}
+
+func TestTNSDecodeFrame_ShortBlock(t *testing.T) {
+	// Test with 8 short windows
+	ics := &syntax.ICStream{
+		TNSDataPresent:    true,
+		NumWindows:        8,
+		NumWindowGroups:   8,
+		WindowSequence:    syntax.EightShortSequence,
+		NumSWB:            14,
+		MaxSFB:            14,
+		SWBOffsetMax:      128,
+		WindowGroupLength: [8]uint8{1, 1, 1, 1, 1, 1, 1, 1},
+	}
+
+	// Set up SWB offsets for short blocks
+	for i := 0; i < 52; i++ {
+		ics.SWBOffset[i] = uint16(i * 8)
+		if ics.SWBOffset[i] > 128 {
+			ics.SWBOffset[i] = 128
+		}
+	}
+
+	// Set up TNS filter for first window only
+	ics.TNS.NFilt[0] = 1
+	ics.TNS.CoefRes[0] = 0
+	ics.TNS.Length[0][0] = 10
+	ics.TNS.Order[0][0] = 1
+	ics.TNS.Direction[0][0] = 0
+	ics.TNS.CoefCompress[0][0] = 0
+	ics.TNS.Coef[0][0][0] = 0
+
+	spec := make([]float64, 1024)
+	for i := range spec {
+		spec[i] = 1.0
+	}
+
+	cfg := &TNSDecodeConfig{
+		ICS:         ics,
+		SRIndex:     4,
+		ObjectType:  aac.ObjectTypeLC,
+		FrameLength: 1024,
+	}
+
+	TNSDecodeFrame(spec, cfg)
+
+	// Verify no crashes and valid output
+	for i := range spec {
+		if math.IsNaN(spec[i]) || math.IsInf(spec[i], 0) {
+			t.Errorf("spec[%d] is invalid: %v", i, spec[i])
+		}
 	}
 }
