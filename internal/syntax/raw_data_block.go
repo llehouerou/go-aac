@@ -2,11 +2,25 @@
 //
 // # Raw Data Block Parsing
 //
-// This file implements:
-// - ParseRawDataBlock: Main entry point for parsing AAC frames
+// This file implements the main entry point for parsing AAC frames:
+// - ParseRawDataBlock: Parses all syntax elements in an AAC frame
 //
-// The raw_data_block() is the core parsing loop that reads and dispatches
-// all syntax elements (SCE, CPE, LFE, CCE, DSE, PCE, FIL) in an AAC frame.
+// The raw_data_block() is defined in ISO/IEC 14496-3 Table 4.4.3.
+// It contains a loop that reads syntax elements until ID_END:
+//
+//	while ((id_syn_ele = getbits(3)) != ID_END) {
+//	    switch (id_syn_ele) {
+//	        case ID_SCE: single_lfe_channel_element(); break;
+//	        case ID_CPE: channel_pair_element(); break;
+//	        case ID_CCE: coupling_channel_element(); break;
+//	        case ID_LFE: single_lfe_channel_element(); break;
+//	        case ID_DSE: data_stream_element(); break;
+//	        case ID_PCE: program_config_element(); break;
+//	        case ID_FIL: fill_element(); break;
+//	    }
+//	}
+//
+// After parsing, byte alignment is applied (required by ISO spec).
 //
 // Ported from: ~/dev/faad2/libfaad/syntax.c:449-648
 package syntax
