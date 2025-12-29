@@ -860,3 +860,84 @@ func TestTNSDecodeFrame_NonZeroCoefficients(t *testing.T) {
 		}
 	}
 }
+
+func TestTNSMAFilter_Basic(t *testing.T) {
+	// Simple test: apply MA filter with known coefficients
+	// MA filter: y[n] = x[n] + lpc[1]*x[n-1] + lpc[2]*x[n-2] + ...
+	spec := []float64{1.0, 2.0, 3.0, 4.0, 5.0}
+
+	// Simple 2nd order filter: y[n] = x[n] + 0.5*x[n-1] + 0.25*x[n-2]
+	lpc := []float64{1.0, 0.5, 0.25}
+
+	tnsMAFilter(spec, 5, 1, lpc, 2)
+
+	// Expected results:
+	// y[0] = x[0] + 0.5*0 + 0.25*0 = 1.0
+	// y[1] = x[1] + 0.5*x[0] + 0.25*0 = 2.0 + 0.5*1.0 = 2.5
+	// y[2] = x[2] + 0.5*x[1] + 0.25*x[0] = 3.0 + 0.5*2.0 + 0.25*1.0 = 4.25
+	// y[3] = x[3] + 0.5*x[2] + 0.25*x[1] = 4.0 + 0.5*3.0 + 0.25*2.0 = 6.0
+	// y[4] = x[4] + 0.5*x[3] + 0.25*x[2] = 5.0 + 0.5*4.0 + 0.25*3.0 = 7.75
+	expected := []float64{1.0, 2.5, 4.25, 6.0, 7.75}
+
+	for i, exp := range expected {
+		if math.Abs(spec[i]-exp) > 1e-10 {
+			t.Errorf("sample %d: got %v, want %v", i, spec[i], exp)
+		}
+	}
+}
+
+func TestTNSMAFilter_BackwardDirection(t *testing.T) {
+	// Test backward direction (inc = -1)
+	spec := []float64{1.0, 2.0, 3.0, 4.0, 5.0}
+
+	lpc := []float64{1.0, 0.5, 0.25}
+
+	// Start from index 4, go backward
+	tnsMAFilterWithOffset(spec, 4, 5, -1, lpc, 2)
+
+	// Processing order: spec[4], spec[3], spec[2], spec[1], spec[0]
+	// y[4] = x[4] + 0.5*0 + 0.25*0 = 5.0
+	// y[3] = x[3] + 0.5*x[4] + 0.25*0 = 4.0 + 0.5*5.0 = 6.5
+	// y[2] = x[2] + 0.5*x[3] + 0.25*x[4] = 3.0 + 0.5*4.0 + 0.25*5.0 = 6.25
+	// y[1] = x[1] + 0.5*x[2] + 0.25*x[3] = 2.0 + 0.5*3.0 + 0.25*4.0 = 4.5
+	// y[0] = x[0] + 0.5*x[1] + 0.25*x[2] = 1.0 + 0.5*2.0 + 0.25*3.0 = 2.75
+	expected := []float64{2.75, 4.5, 6.25, 6.5, 5.0}
+
+	for i, exp := range expected {
+		if math.Abs(spec[i]-exp) > 1e-10 {
+			t.Errorf("sample %d: got %v, want %v", i, spec[i], exp)
+		}
+	}
+}
+
+func TestTNSMAFilter_ZeroOrder(t *testing.T) {
+	spec := []float64{1.0, 2.0, 3.0}
+	original := make([]float64, len(spec))
+	copy(original, spec)
+
+	lpc := []float64{1.0}
+	tnsMAFilter(spec, 3, 1, lpc, 0)
+
+	// Zero order filter should not modify spectrum
+	for i := range spec {
+		if spec[i] != original[i] {
+			t.Errorf("sample %d modified with zero order: got %v, want %v", i, spec[i], original[i])
+		}
+	}
+}
+
+func TestTNSMAFilter_ZeroSize(t *testing.T) {
+	spec := []float64{1.0, 2.0, 3.0}
+	original := make([]float64, len(spec))
+	copy(original, spec)
+
+	lpc := []float64{1.0, 0.5}
+	tnsMAFilter(spec, 0, 1, lpc, 1)
+
+	// Zero size should not modify spectrum
+	for i := range spec {
+		if spec[i] != original[i] {
+			t.Errorf("sample %d modified with zero size: got %v, want %v", i, spec[i], original[i])
+		}
+	}
+}

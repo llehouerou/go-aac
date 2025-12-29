@@ -79,6 +79,68 @@ func tnsARFilterWithOffset(spectrum []float64, startOffset int, size int16, inc 
 	}
 }
 
+// tnsMAFilter applies an all-zero (MA) FIR filter to spectral coefficients.
+// This is the TNS encoding filter used by LTP (opposite of AR decoding filter).
+//
+// The filter is defined by:
+//
+//	y[n] = x[n] + lpc[1]*x[n-1] + lpc[2]*x[n-2] + ... + lpc[order]*x[n-order]
+//
+// Note: This uses the INPUT values (x) in the state, not output values (y).
+// This is the key difference from the AR filter.
+//
+// Parameters:
+//   - spectrum: spectral data to filter (modified in-place)
+//   - size: number of samples to filter
+//   - inc: direction (+1 for forward, -1 for backward)
+//   - lpc: LPC filter coefficients (lpc[0] is always 1.0)
+//   - order: filter order
+//
+// Ported from: tns_ma_filter() in ~/dev/faad2/libfaad/tns.c:295-339
+func tnsMAFilter(spectrum []float64, size int16, inc int8, lpc []float64, order uint8) {
+	tnsMAFilterWithOffset(spectrum, 0, size, inc, lpc, order)
+}
+
+// tnsMAFilterWithOffset applies an all-zero (MA) FIR filter starting at a specific offset.
+//
+// Ported from: tns_ma_filter() in ~/dev/faad2/libfaad/tns.c:295-339
+func tnsMAFilterWithOffset(spectrum []float64, startOffset int, size int16, inc int8, lpc []float64, order uint8) {
+	if size <= 0 || order == 0 {
+		return
+	}
+
+	// State is stored as a double ringbuffer for efficient wraparound
+	// State stores INPUT values (x), not output values
+	state := make([]float64, 2*TNSMaxOrder)
+	stateIndex := int8(0)
+
+	// Process each sample
+	idx := startOffset
+	for i := int16(0); i < size; i++ {
+		// Save input before computing output
+		x := spectrum[idx]
+
+		// Compute filter output: y = x + sum(lpc[j+1] * state[j])
+		y := 0.0
+		for j := uint8(0); j < order; j++ {
+			y += state[int(stateIndex)+int(j)] * lpc[j+1]
+		}
+		y = x + y
+
+		// Update double ringbuffer state with INPUT value
+		stateIndex--
+		if stateIndex < 0 {
+			stateIndex = int8(order - 1)
+		}
+		state[stateIndex] = x
+		state[int(stateIndex)+int(order)] = x
+
+		// Write output and advance
+		spectrum[idx] = y
+		idx += int(inc)
+	}
+}
+
 // tnsDecodeCoef converts transmitted TNS coefficients to LPC filter coefficients.
 // Uses Levinson-Durbin recursion to convert reflection coefficients to direct form.
 //
