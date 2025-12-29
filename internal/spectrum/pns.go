@@ -2,6 +2,8 @@
 package spectrum
 
 import (
+	"math"
+
 	"github.com/llehouerou/go-aac/internal/syntax"
 )
 
@@ -44,4 +46,45 @@ type PNSDecodeConfig struct {
 
 	// ObjectType is the AAC object type (for IMDCT scaling in fixed-point, unused in float)
 	ObjectType uint8
+}
+
+// genRandVector generates a random noise vector with energy scaled by scale_factor.
+// The formula is: spec[i] = random * scale, where scale = 2^(0.25 * scale_factor)
+// and the random values are normalized to unit energy.
+//
+// Ported from: gen_rand_vector() in ~/dev/faad2/libfaad/pns.c:80-107 (floating-point path)
+func genRandVector(spec []float64, scaleFactor int16, r1, r2 *uint32) {
+	size := len(spec)
+	if size == 0 {
+		return
+	}
+
+	// Clamp scale factor to prevent overflow
+	sf := scaleFactor
+	if sf < -120 {
+		sf = -120
+	} else if sf > 120 {
+		sf = 120
+	}
+
+	// Generate random values and accumulate energy
+	energy := 0.0
+	for i := 0; i < size; i++ {
+		// Convert RNG output to signed float
+		tmp := float64(int32(RNG(r1, r2)))
+		spec[i] = tmp
+		energy += tmp * tmp
+	}
+
+	// Normalize and scale
+	if energy > 0 {
+		// Normalize to unit energy
+		scale := 1.0 / math.Sqrt(energy)
+		// Apply scale factor: 2^(0.25 * sf)
+		scale *= math.Pow(2.0, 0.25*float64(sf))
+
+		for i := 0; i < size; i++ {
+			spec[i] *= scale
+		}
+	}
 }
