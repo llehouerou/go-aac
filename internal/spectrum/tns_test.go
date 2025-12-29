@@ -710,6 +710,9 @@ func TestTNSDecodeFrame_ZeroRegion(t *testing.T) {
 		spec[i] = 1.0
 	}
 
+	original := make([]float64, len(spec))
+	copy(original, spec)
+
 	cfg := &TNSDecodeConfig{
 		ICS:         ics,
 		SRIndex:     4,
@@ -721,6 +724,11 @@ func TestTNSDecodeFrame_ZeroRegion(t *testing.T) {
 
 	// When region is zero or negative, spectrum should be unchanged
 	// (filter is skipped)
+	for i, want := range original {
+		if spec[i] != want {
+			t.Errorf("spec[%d]: got %v, want %v (should be unchanged)", i, spec[i], want)
+		}
+	}
 }
 
 func TestTNSDecodeFrame_BackwardDirection(t *testing.T) {
@@ -756,6 +764,9 @@ func TestTNSDecodeFrame_BackwardDirection(t *testing.T) {
 		spec[i] = 1.0
 	}
 
+	original := make([]float64, len(spec))
+	copy(original, spec)
+
 	cfg := &TNSDecodeConfig{
 		ICS:         ics,
 		SRIndex:     4,
@@ -765,11 +776,23 @@ func TestTNSDecodeFrame_BackwardDirection(t *testing.T) {
 
 	TNSDecodeFrame(spec, cfg)
 
-	// Verify no invalid values and spectrum was modified
+	// Verify no invalid values
 	for i := range spec {
 		if math.IsNaN(spec[i]) || math.IsInf(spec[i], 0) {
 			t.Errorf("spec[%d] is invalid: %v", i, spec[i])
 		}
+	}
+
+	// Verify spectrum was actually modified
+	modified := false
+	for i := range spec {
+		if spec[i] != original[i] {
+			modified = true
+			break
+		}
+	}
+	if !modified {
+		t.Error("Spectrum was not modified despite non-zero filter coefficient")
 	}
 }
 
