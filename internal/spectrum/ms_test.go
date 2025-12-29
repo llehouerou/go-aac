@@ -104,3 +104,91 @@ func TestMSDecode_MSMaskAll_LongBlock(t *testing.T) {
 		}
 	}
 }
+
+func TestMSDecode_MSMaskPerBand(t *testing.T) {
+	// ms_mask_present = 1 means per-band M/S mask
+	icsL := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          3,
+		NumSWB:          3,
+		MSMaskPresent:   1, // Per-band mask
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	icsL.WindowGroupLength[0] = 1
+	icsL.SWBOffset[0] = 0
+	icsL.SWBOffset[1] = 4
+	icsL.SWBOffset[2] = 8
+	icsL.SWBOffset[3] = 12
+	icsL.SWBOffsetMax = 1024
+	icsL.SFBCB[0][0] = 1
+	icsL.SFBCB[0][1] = 1
+	icsL.SFBCB[0][2] = 1
+
+	// SFB 0: M/S enabled
+	// SFB 1: M/S disabled
+	// SFB 2: M/S enabled
+	icsL.MSUsed[0][0] = 1
+	icsL.MSUsed[0][1] = 0
+	icsL.MSUsed[0][2] = 1
+
+	icsR := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          3,
+		NumSWB:          3,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	icsR.WindowGroupLength[0] = 1
+	icsR.SWBOffset[0] = 0
+	icsR.SWBOffset[1] = 4
+	icsR.SWBOffset[2] = 8
+	icsR.SWBOffset[3] = 12
+	icsR.SFBCB[0][0] = 1
+	icsR.SFBCB[0][1] = 1
+	icsR.SFBCB[0][2] = 1
+
+	// Input: all M=10, S=2
+	lSpec := make([]float64, 12)
+	rSpec := make([]float64, 12)
+	for i := 0; i < 12; i++ {
+		lSpec[i] = 10.0
+		rSpec[i] = 2.0
+	}
+
+	cfg := &MSDecodeConfig{
+		ICSL:        icsL,
+		ICSR:        icsR,
+		FrameLength: 1024,
+	}
+
+	MSDecode(lSpec, rSpec, cfg)
+
+	// SFB 0 (indices 0-3): M/S applied -> L=12, R=8
+	for i := 0; i < 4; i++ {
+		if lSpec[i] != 12.0 {
+			t.Errorf("lSpec[%d] = %v, want 12.0 (M/S applied)", i, lSpec[i])
+		}
+		if rSpec[i] != 8.0 {
+			t.Errorf("rSpec[%d] = %v, want 8.0 (M/S applied)", i, rSpec[i])
+		}
+	}
+
+	// SFB 1 (indices 4-7): M/S NOT applied -> unchanged
+	for i := 4; i < 8; i++ {
+		if lSpec[i] != 10.0 {
+			t.Errorf("lSpec[%d] = %v, want 10.0 (unchanged)", i, lSpec[i])
+		}
+		if rSpec[i] != 2.0 {
+			t.Errorf("rSpec[%d] = %v, want 2.0 (unchanged)", i, rSpec[i])
+		}
+	}
+
+	// SFB 2 (indices 8-11): M/S applied -> L=12, R=8
+	for i := 8; i < 12; i++ {
+		if lSpec[i] != 12.0 {
+			t.Errorf("lSpec[%d] = %v, want 12.0 (M/S applied)", i, lSpec[i])
+		}
+		if rSpec[i] != 8.0 {
+			t.Errorf("rSpec[%d] = %v, want 8.0 (M/S applied)", i, rSpec[i])
+		}
+	}
+}
