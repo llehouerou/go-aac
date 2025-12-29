@@ -322,3 +322,81 @@ func TestApplyScaleFactors_NegativeScaleFactor(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyScaleFactors_ShortBlock(t *testing.T) {
+	// Setup: 8 short windows in 1 group
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      8,
+		MaxSFB:          1,
+		NumSWB:          1,
+		WindowSequence:  syntax.EightShortSequence,
+	}
+	ics.WindowGroupLength[0] = 8
+
+	// Short block: each window is 128 samples, SFB covers first 4 of each
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 4
+
+	ics.SFBCB[0][0] = uint8(huffman.EscHCB)
+	ics.ScaleFactors[0][0] = 104 // multiplier = 2.0
+
+	// 8 windows * 4 coefficients = 32 values
+	// Interleaved: win0[0-3], win1[0-3], ..., win7[0-3] = 32 total
+	// With winInc = 4 (SWBOffset[NumSWB]), data layout is sequential
+	specData := make([]float64, 32)
+	for i := range specData {
+		specData[i] = 1.0
+	}
+
+	cfg := &ApplyScaleFactorsConfig{
+		ICS:         ics,
+		FrameLength: 1024,
+	}
+
+	ApplyScaleFactors(specData, cfg)
+
+	// All values should be multiplied by 2.0
+	for i, v := range specData {
+		if v != 2.0 {
+			t.Errorf("specData[%d] = %v, want 2.0", i, v)
+		}
+	}
+}
+
+func TestApplyScaleFactors_MultipleSFB(t *testing.T) {
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          2,
+		NumSWB:          2,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 4
+	ics.SWBOffset[2] = 8
+
+	ics.SFBCB[0][0] = uint8(huffman.EscHCB)
+	ics.SFBCB[0][1] = uint8(huffman.EscHCB)
+
+	// SFB 0: sf=104 -> mult=2.0
+	// SFB 1: sf=108 -> mult=4.0
+	ics.ScaleFactors[0][0] = 104
+	ics.ScaleFactors[0][1] = 108
+
+	specData := []float64{1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0}
+
+	cfg := &ApplyScaleFactorsConfig{
+		ICS:         ics,
+		FrameLength: 1024,
+	}
+
+	ApplyScaleFactors(specData, cfg)
+
+	expected := []float64{2.0, 2.0, 2.0, 2.0, 4.0, 4.0, 4.0, 4.0}
+	for i, v := range specData {
+		if v != expected[i] {
+			t.Errorf("specData[%d] = %v, want %v", i, v, expected[i])
+		}
+	}
+}
