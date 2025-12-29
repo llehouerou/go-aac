@@ -296,3 +296,218 @@ func TestPNSDecode_DeterministicWithState(t *testing.T) {
 		}
 	}
 }
+
+func TestPNSDecode_StereoIndependent(t *testing.T) {
+	// Without ms_used, left and right get independent noise
+	icsL := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+		MSMaskPresent:   0, // No M/S
+	}
+	icsL.WindowGroupLength[0] = 1
+	icsL.SWBOffset[0] = 0
+	icsL.SWBOffset[1] = 16
+	icsL.SWBOffsetMax = 1024
+	icsL.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+	icsL.ScaleFactors[0][0] = 0
+
+	icsR := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	icsR.WindowGroupLength[0] = 1
+	icsR.SWBOffset[0] = 0
+	icsR.SWBOffset[1] = 16
+	icsR.SWBOffsetMax = 1024
+	icsR.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+	icsR.ScaleFactors[0][0] = 0 // Same scale factor
+
+	specL := make([]float64, 16)
+	specR := make([]float64, 16)
+
+	state := NewPNSState()
+	cfg := &PNSDecodeConfig{
+		ICSL:        icsL,
+		ICSR:        icsR,
+		FrameLength: 1024,
+		ChannelPair: true,
+	}
+
+	PNSDecode(specL, specR, state, cfg)
+
+	// Left and right should be different (independent noise)
+	allSame := true
+	for i := range specL {
+		if specL[i] != specR[i] {
+			allSame = false
+			break
+		}
+	}
+	if allSame {
+		t.Error("left and right should have independent noise")
+	}
+}
+
+func TestPNSDecode_StereoCorrelated(t *testing.T) {
+	// With ms_used=1, left and right get correlated noise (same pattern)
+	icsL := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+		MSMaskPresent:   1, // Per-band M/S
+	}
+	icsL.WindowGroupLength[0] = 1
+	icsL.SWBOffset[0] = 0
+	icsL.SWBOffset[1] = 16
+	icsL.SWBOffsetMax = 1024
+	icsL.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+	icsL.ScaleFactors[0][0] = 0
+	icsL.MSUsed[0][0] = 1 // Correlated noise
+
+	icsR := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	icsR.WindowGroupLength[0] = 1
+	icsR.SWBOffset[0] = 0
+	icsR.SWBOffset[1] = 16
+	icsR.SWBOffsetMax = 1024
+	icsR.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+	icsR.ScaleFactors[0][0] = 0 // Same scale factor
+
+	specL := make([]float64, 16)
+	specR := make([]float64, 16)
+
+	state := NewPNSState()
+	cfg := &PNSDecodeConfig{
+		ICSL:        icsL,
+		ICSR:        icsR,
+		FrameLength: 1024,
+		ChannelPair: true,
+	}
+
+	PNSDecode(specL, specR, state, cfg)
+
+	// Left and right should be the same (correlated noise)
+	for i := range specL {
+		if specL[i] != specR[i] {
+			t.Errorf("spec[%d]: L=%v R=%v, should be equal (correlated)", i, specL[i], specR[i])
+		}
+	}
+}
+
+func TestPNSDecode_StereoCorrelated_MSMaskPresent2(t *testing.T) {
+	// With ms_mask_present=2, all bands are correlated
+	icsL := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+		MSMaskPresent:   2, // All bands M/S
+	}
+	icsL.WindowGroupLength[0] = 1
+	icsL.SWBOffset[0] = 0
+	icsL.SWBOffset[1] = 16
+	icsL.SWBOffsetMax = 1024
+	icsL.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+	icsL.ScaleFactors[0][0] = 0
+	// MSUsed not set, but ms_mask_present=2 implies all
+
+	icsR := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	icsR.WindowGroupLength[0] = 1
+	icsR.SWBOffset[0] = 0
+	icsR.SWBOffset[1] = 16
+	icsR.SWBOffsetMax = 1024
+	icsR.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+	icsR.ScaleFactors[0][0] = 0
+
+	specL := make([]float64, 16)
+	specR := make([]float64, 16)
+
+	state := NewPNSState()
+	cfg := &PNSDecodeConfig{
+		ICSL:        icsL,
+		ICSR:        icsR,
+		FrameLength: 1024,
+		ChannelPair: true,
+	}
+
+	PNSDecode(specL, specR, state, cfg)
+
+	// Should be correlated
+	for i := range specL {
+		if specL[i] != specR[i] {
+			t.Errorf("spec[%d]: L=%v R=%v, should be equal", i, specL[i], specR[i])
+		}
+	}
+}
+
+func TestPNSDecode_OnlyRightHasPNS(t *testing.T) {
+	// Only right channel has PNS - no correlation possible
+	icsL := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+		MSMaskPresent:   1,
+	}
+	icsL.WindowGroupLength[0] = 1
+	icsL.SWBOffset[0] = 0
+	icsL.SWBOffset[1] = 16
+	icsL.SWBOffsetMax = 1024
+	icsL.SFBCB[0][0] = 1 // Normal, not noise
+	icsL.MSUsed[0][0] = 1
+
+	icsR := &syntax.ICStream{
+		NumWindowGroups: 1,
+		MaxSFB:          1,
+		WindowSequence:  syntax.OnlyLongSequence,
+	}
+	icsR.WindowGroupLength[0] = 1
+	icsR.SWBOffset[0] = 0
+	icsR.SWBOffset[1] = 16
+	icsR.SWBOffsetMax = 1024
+	icsR.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+	icsR.ScaleFactors[0][0] = 0
+
+	specL := make([]float64, 16)
+	specR := make([]float64, 16)
+	for i := range specL {
+		specL[i] = float64(i + 1) // Non-zero to verify unchanged
+	}
+
+	state := NewPNSState()
+	cfg := &PNSDecodeConfig{
+		ICSL:        icsL,
+		ICSR:        icsR,
+		FrameLength: 1024,
+		ChannelPair: true,
+	}
+
+	PNSDecode(specL, specR, state, cfg)
+
+	// Left should be unchanged
+	for i := range specL {
+		expected := float64(i + 1)
+		if specL[i] != expected {
+			t.Errorf("specL[%d] = %v, want %v (unchanged)", i, specL[i], expected)
+		}
+	}
+
+	// Right should have noise
+	allZero := true
+	for _, v := range specR {
+		if v != 0 {
+			allZero = false
+			break
+		}
+	}
+	if allZero {
+		t.Error("specR should have noise")
+	}
+}
