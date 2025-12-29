@@ -182,3 +182,60 @@ func TestParseRawDataBlock_CCECount(t *testing.T) {
 		t.Errorf("CCEConfig.ObjectType = %d, want %d", cceCfg.ObjectType, cfg.ObjectType)
 	}
 }
+
+func TestParseRawDataBlock_DSEOnly(t *testing.T) {
+	// Frame with DSE followed by ID_END
+	// DSE: element_id=0x4 (100), tag=0 (0000), align=0 (0), count=0 (00000000)
+	// ID_END: 111
+	// Total bits: 3 + 4 + 1 + 8 + 3 = 19 bits
+	// Binary: 100 0000 0 00000000 111 00000 = 0x80 0x00 0xE0
+	data := []byte{0x80, 0x00, 0xE0}
+	r := bits.NewReader(data)
+
+	cfg := &RawDataBlockConfig{
+		SFIndex:              4,
+		FrameLength:          1024,
+		ObjectType:           ObjectTypeLC,
+		ChannelConfiguration: 2,
+	}
+	drc := &DRCInfo{}
+
+	result, err := ParseRawDataBlock(r, cfg, drc)
+	if err != nil {
+		t.Fatalf("ParseRawDataBlock() error = %v", err)
+	}
+
+	if result.NumElements != 1 {
+		t.Errorf("NumElements = %d, want 1", result.NumElements)
+	}
+	if result.NumChannels != 0 {
+		t.Errorf("NumChannels = %d, want 0 (DSE has no audio)", result.NumChannels)
+	}
+}
+
+func TestParseRawDataBlock_FILOnly(t *testing.T) {
+	// Frame with minimal FIL followed by ID_END
+	// FIL: element_id=0x6 (110), count=0 (0000)
+	// ID_END: 111
+	// Total bits: 3 + 4 + 3 = 10 bits
+	// Padded: 110 0000 111 000000 = 0xC1 0xC0
+	data := []byte{0xC1, 0xC0}
+	r := bits.NewReader(data)
+
+	cfg := &RawDataBlockConfig{
+		SFIndex:              4,
+		FrameLength:          1024,
+		ObjectType:           ObjectTypeLC,
+		ChannelConfiguration: 2,
+	}
+	drc := &DRCInfo{}
+
+	result, err := ParseRawDataBlock(r, cfg, drc)
+	if err != nil {
+		t.Fatalf("ParseRawDataBlock() error = %v", err)
+	}
+
+	if result.NumElements != 1 {
+		t.Errorf("NumElements = %d, want 1", result.NumElements)
+	}
+}
