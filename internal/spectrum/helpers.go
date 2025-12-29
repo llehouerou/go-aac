@@ -41,3 +41,14 @@ func IsIntensityICS(ics *syntax.ICStream, group, sfb uint8) int8 {
 func IsNoiseICS(ics *syntax.ICStream, group, sfb uint8) bool {
 	return IsNoise(huffman.Codebook(ics.SFBCB[group][sfb]))
 }
+
+// InvertIntensity returns the intensity stereo sign inversion factor.
+// Returns -1 if the M/S mask indicates inversion, 1 otherwise.
+//
+// Ported from: invert_intensity() in ~/dev/faad2/libfaad/is.h:56-61
+func InvertIntensity(ics *syntax.ICStream, group, sfb uint8) int8 {
+	if ics.MSMaskPresent == 1 {
+		return 1 - 2*int8(ics.MSUsed[group][sfb])
+	}
+	return 1
+}

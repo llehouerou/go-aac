@@ -86,3 +86,32 @@ func TestIsNoiseICS(t *testing.T) {
 		t.Error("IsNoiseICS with NoiseHCB = false, want true")
 	}
 }
+
+func TestInvertIntensity(t *testing.T) {
+	tests := []struct {
+		name          string
+		msMaskPresent uint8
+		msUsed        uint8
+		expected      int8
+	}{
+		{"ms_mask_present=0 (no MS)", 0, 0, 1},
+		{"ms_mask_present=0, ms_used=1", 0, 1, 1},
+		{"ms_mask_present=1, ms_used=0", 1, 0, 1},
+		{"ms_mask_present=1, ms_used=1", 1, 1, -1},
+		{"ms_mask_present=2 (all bands)", 2, 0, 1},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ics := &syntax.ICStream{
+				MSMaskPresent: tc.msMaskPresent,
+			}
+			ics.MSUsed[0][0] = tc.msUsed
+
+			got := InvertIntensity(ics, 0, 0)
+			if got != tc.expected {
+				t.Errorf("InvertIntensity() = %d, want %d", got, tc.expected)
+			}
+		})
+	}
+}
