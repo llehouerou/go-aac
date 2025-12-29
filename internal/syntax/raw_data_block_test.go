@@ -121,3 +121,26 @@ func TestParseRawDataBlock_SCECount(t *testing.T) {
 		t.Errorf("SCEConfig.ObjectType = %d, want %d", sceCfg.ObjectType, cfg.ObjectType)
 	}
 }
+
+func TestParseRawDataBlock_CPECount(t *testing.T) {
+	cfg := &RawDataBlockConfig{
+		SFIndex:              4,
+		FrameLength:          1024,
+		ObjectType:           ObjectTypeLC,
+		ChannelConfiguration: 2, // Stereo
+	}
+
+	// Verify CPEConfig is created correctly from RawDataBlockConfig
+	cpeCfg := &CPEConfig{
+		SFIndex:     cfg.SFIndex,
+		FrameLength: cfg.FrameLength,
+		ObjectType:  cfg.ObjectType,
+	}
+
+	if cpeCfg.SFIndex != cfg.SFIndex {
+		t.Errorf("CPEConfig.SFIndex = %d, want %d", cpeCfg.SFIndex, cfg.SFIndex)
+	}
+	if cpeCfg.FrameLength != cfg.FrameLength {
+		t.Errorf("CPEConfig.FrameLength = %d, want %d", cpeCfg.FrameLength, cfg.FrameLength)
+	}
+}

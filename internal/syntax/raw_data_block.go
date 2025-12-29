@@ -93,7 +93,20 @@ func ParseRawDataBlock(r *bits.Reader, cfg *RawDataBlockConfig, drc *DRCInfo) (*
 			result.NumChannels++
 
 		case IDCPE:
-			// TODO: Parse CPE (Task 6)
+			// Parse Channel Pair Element
+			// Ported from: decode_cpe() call in syntax.c:479
+			cpeCfg := &CPEConfig{
+				SFIndex:     cfg.SFIndex,
+				FrameLength: cfg.FrameLength,
+				ObjectType:  cfg.ObjectType,
+			}
+			cpeResult, err := ParseChannelPairElement(r, result.NumChannels, cpeCfg)
+			if err != nil {
+				return nil, err
+			}
+			result.CPEResults[result.CPECount] = cpeResult
+			result.CPECount++
+			result.NumChannels += 2
 
 		case IDLFE:
 			// TODO: Parse LFE (Task 7)
