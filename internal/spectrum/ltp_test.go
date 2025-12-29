@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/llehouerou/go-aac"
+	"github.com/llehouerou/go-aac/internal/syntax"
 )
 
 func TestIsLTPObjectType(t *testing.T) {
@@ -205,6 +206,79 @@ func TestLTPUpdateState_LD(t *testing.T) {
 		expected := realToInt16(float64(i * 20))
 		if state[3*frameLen+i] != expected {
 			t.Errorf("state[%d] = %d, want %d (overlap)", 3*frameLen+i, state[3*frameLen+i], expected)
+		}
+	}
+}
+
+func TestLTPPrediction_NoDataPresent(t *testing.T) {
+	frameLen := uint16(1024)
+	spec := make([]float64, frameLen)
+	for i := range spec {
+		spec[i] = float64(i)
+	}
+	original := make([]float64, len(spec))
+	copy(original, spec)
+
+	ics := &syntax.ICStream{
+		WindowSequence: syntax.OnlyLongSequence,
+	}
+
+	ltp := &syntax.LTPInfo{
+		DataPresent: false,
+	}
+
+	cfg := &LTPConfig{
+		ICS:         ics,
+		LTP:         ltp,
+		SRIndex:     4,
+		ObjectType:  aac.ObjectTypeLTP,
+		FrameLength: frameLen,
+		// FilterBank is nil - won't be called since DataPresent is false
+	}
+
+	LTPPrediction(spec, nil, cfg)
+
+	// No LTP data - spectrum should be unchanged
+	for i := range spec {
+		if spec[i] != original[i] {
+			t.Errorf("sample %d modified without LTP data: got %v, want %v", i, spec[i], original[i])
+		}
+	}
+}
+
+func TestLTPPrediction_ShortBlocks(t *testing.T) {
+	frameLen := uint16(1024)
+	spec := make([]float64, frameLen)
+	for i := range spec {
+		spec[i] = float64(i)
+	}
+	original := make([]float64, len(spec))
+	copy(original, spec)
+
+	ics := &syntax.ICStream{
+		WindowSequence: syntax.EightShortSequence, // LTP not applied to short blocks
+	}
+
+	ltp := &syntax.LTPInfo{
+		DataPresent: true,
+		Lag:         100,
+		Coef:        3,
+	}
+
+	cfg := &LTPConfig{
+		ICS:         ics,
+		LTP:         ltp,
+		SRIndex:     4,
+		ObjectType:  aac.ObjectTypeLTP,
+		FrameLength: frameLen,
+	}
+
+	LTPPrediction(spec, nil, cfg)
+
+	// Short blocks - spectrum should be unchanged
+	for i := range spec {
+		if spec[i] != original[i] {
+			t.Errorf("sample %d modified with short blocks: got %v, want %v", i, spec[i], original[i])
 		}
 	}
 }
