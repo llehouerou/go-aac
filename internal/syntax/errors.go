@@ -89,3 +89,23 @@ var (
 	// FAAD2 error code: 32
 	ErrIntensityStereoInCCE = errors.New("syntax: intensity stereo not allowed in coupling channel element")
 )
+
+// Raw data block errors.
+var (
+	// ErrPCENotFirst indicates PCE appeared after other elements in the frame.
+	// Per ISO/IEC 14496-4:5.6.4.1.2.1.3, PCE in raw_data_block should be ignored
+	// but FAAD2 returns error 31 when PCE is not the first element.
+	ErrPCENotFirst = errors.New("syntax: PCE must be first element in frame")
+
+	// ErrCCENotSupported indicates CCE is present but coupling decoding is disabled.
+	// FAAD2 returns error 6 when COUPLING_DEC is not defined.
+	ErrCCENotSupported = errors.New("syntax: coupling channel element not supported")
+
+	// ErrUnknownElement indicates an unknown or invalid element ID was encountered.
+	// FAAD2 error code: 32
+	ErrUnknownElement = errors.New("syntax: unknown element type")
+
+	// ErrBitstreamError indicates a bitstream read error occurred.
+	// FAAD2 error code: 32
+	ErrBitstreamError = errors.New("syntax: bitstream error")
+)

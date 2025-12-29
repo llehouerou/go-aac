@@ -37,3 +37,21 @@ func TestCCEErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestRawDataBlockErrors(t *testing.T) {
+	errors := []struct {
+		err      error
+		contains string
+	}{
+		{ErrPCENotFirst, "first element"},
+		{ErrCCENotSupported, "coupling channel"},
+		{ErrUnknownElement, "unknown element"},
+		{ErrBitstreamError, "bitstream"},
+	}
+
+	for _, tc := range errors {
+		if tc.err == nil {
+			t.Errorf("Error for %q should not be nil", tc.contains)
+		}
+	}
+}
