@@ -24,3 +24,37 @@ func TestRawDataBlockConfig_Fields(t *testing.T) {
 		t.Errorf("ChannelConfiguration = %d, want 2", cfg.ChannelConfiguration)
 	}
 }
+
+func TestRawDataBlockResult_Fields(t *testing.T) {
+	result := &RawDataBlockResult{
+		NumChannels:  2,
+		NumElements:  1,
+		FirstElement: IDCPE,
+		HasLFE:       false,
+	}
+
+	if result.NumChannels != 2 {
+		t.Errorf("NumChannels = %d, want 2", result.NumChannels)
+	}
+	if result.NumElements != 1 {
+		t.Errorf("NumElements = %d, want 1", result.NumElements)
+	}
+	if result.FirstElement != IDCPE {
+		t.Errorf("FirstElement = %d, want %d", result.FirstElement, IDCPE)
+	}
+	if result.HasLFE {
+		t.Error("HasLFE = true, want false")
+	}
+}
+
+func TestRawDataBlockResult_ElementCapacity(t *testing.T) {
+	result := &RawDataBlockResult{}
+
+	// Verify capacity matches MaxSyntaxElements
+	if len(result.SCEResults) != MaxSyntaxElements {
+		t.Errorf("SCEResults capacity = %d, want %d", len(result.SCEResults), MaxSyntaxElements)
+	}
+	if len(result.CPEResults) != MaxSyntaxElements {
+		t.Errorf("CPEResults capacity = %d, want %d", len(result.CPEResults), MaxSyntaxElements)
+	}
+}
