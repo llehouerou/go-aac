@@ -109,7 +109,22 @@ func ParseRawDataBlock(r *bits.Reader, cfg *RawDataBlockConfig, drc *DRCInfo) (*
 			result.NumChannels += 2
 
 		case IDLFE:
-			// TODO: Parse LFE (Task 7)
+			// Parse LFE Channel Element (uses same syntax as SCE)
+			// Ported from: decode_sce_lfe() call with ID_LFE in syntax.c:487-489
+			result.HasLFE = true
+			lfeCfg := &SCEConfig{
+				SFIndex:     cfg.SFIndex,
+				FrameLength: cfg.FrameLength,
+				ObjectType:  cfg.ObjectType,
+			}
+			lfeResult, err := ParseLFEElement(r, result.NumChannels, lfeCfg)
+			if err != nil {
+				return nil, err
+			}
+			// LFE results stored in SCEResults array (same type)
+			result.SCEResults[result.SCECount+result.LFECount] = lfeResult
+			result.LFECount++
+			result.NumChannels++
 
 		case IDCCE:
 			// TODO: Parse CCE (Task 8)

@@ -144,3 +144,15 @@ func TestParseRawDataBlock_CPECount(t *testing.T) {
 		t.Errorf("CPEConfig.FrameLength = %d, want %d", cpeCfg.FrameLength, cfg.FrameLength)
 	}
 }
+
+func TestParseRawDataBlock_LFETracking(t *testing.T) {
+	result := &RawDataBlockResult{}
+
+	// Initially no LFE
+	if result.HasLFE {
+		t.Error("HasLFE should be false initially")
+	}
+	if result.LFECount != 0 {
+		t.Errorf("LFECount = %d, want 0", result.LFECount)
+	}
+}
