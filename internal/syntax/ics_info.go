@@ -85,22 +85,18 @@ func parseMainPrediction(r *bits.Reader, ics *ICStream, sfIndex uint8) error {
 	if ics.MaxSFB < limit {
 		limit = ics.MaxSFB
 	}
+	ics.Pred.Limit = limit
 
 	// predictor_reset (1 bit)
-	predictorReset := r.Get1Bit() != 0
-	var predictorResetGroup uint8
-	if predictorReset {
-		predictorResetGroup = uint8(r.GetBits(5))
+	ics.Pred.PredictorReset = r.Get1Bit() != 0
+	if ics.Pred.PredictorReset {
+		ics.Pred.PredictorResetGroupNumber = uint8(r.GetBits(5))
 	}
 
 	// prediction_used flags for each SFB
 	for sfb := uint8(0); sfb < limit; sfb++ {
-		_ = r.Get1Bit() // prediction_used[sfb]
+		ics.Pred.PredictionUsed[sfb] = r.Get1Bit() != 0
 	}
-
-	// Store in ICS if needed (currently not storing MAIN pred data)
-	_ = predictorReset
-	_ = predictorResetGroup
 
 	return nil
 }

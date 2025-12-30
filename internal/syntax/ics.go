@@ -165,6 +165,7 @@ type ICStream struct {
 	TNS TNSInfo   // TNS data (if present)
 
 	// Optional profile data
-	LTP  LTPInfo // LTP data (LTP profile, first predictor)
-	LTP2 LTPInfo // LTP data (LTP profile, second predictor for CPE)
+	LTP  LTPInfo  // LTP data (LTP profile, first predictor)
+	LTP2 LTPInfo  // LTP data (LTP profile, second predictor for CPE)
+	Pred PredInfo // MAIN profile prediction data
 }

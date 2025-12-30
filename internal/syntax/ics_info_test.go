@@ -237,6 +237,77 @@ func TestParseICSInfo_MainPrediction(t *testing.T) {
 	if !ics.PredictorDataPresent {
 		t.Error("PredictorDataPresent should be true")
 	}
+
+	// Verify PredInfo is correctly populated
+	if ics.Pred.Limit != 20 {
+		t.Errorf("Pred.Limit: got %d, want 20", ics.Pred.Limit)
+	}
+	if !ics.Pred.PredictorReset {
+		t.Error("Pred.PredictorReset should be true")
+	}
+	if ics.Pred.PredictorResetGroupNumber != 5 {
+		t.Errorf("Pred.PredictorResetGroupNumber: got %d, want 5", ics.Pred.PredictorResetGroupNumber)
+	}
+	// All prediction_used bits were zeros
+	for sfb := uint8(0); sfb < 20; sfb++ {
+		if ics.Pred.PredictionUsed[sfb] {
+			t.Errorf("Pred.PredictionUsed[%d] should be false", sfb)
+		}
+	}
+}
+
+func TestParseICSInfo_MainPredictionWithUsedBands(t *testing.T) {
+	// Test MAIN profile with some prediction_used bits set
+	// ics_reserved_bit: 0 (1 bit)
+	// window_sequence: 0 (2 bits) = ONLY_LONG_SEQUENCE
+	// window_shape: 0 (1 bit) = sine
+	// max_sfb: 8 (6 bits) = 0b001000
+	// Predictor data present: 1 (1 bit)
+	// predictor_reset: 0 (1 bit)
+	// prediction_used[0..7]: 10101010 (8 bits) - alternating pattern
+	// Total: 1+2+1+6+1+1+8 = 20 bits
+	// Bits: 0 00 0 001000 1 0 10101010 = 0b0000_0010_0010_1010_1010
+	// Byte 0: 0000_0010 = 0x02
+	// Byte 1: 0010_1010 = 0x2A
+	// Byte 2: 1010_0000 = 0xA0 (padding)
+	data := []byte{0x02, 0x2A, 0xA0}
+	r := bits.NewReader(data)
+
+	ics := &ICStream{}
+	cfg := &ICSInfoConfig{
+		SFIndex:     4,
+		FrameLength: 1024,
+		ObjectType:  ObjectTypeMain,
+	}
+
+	err := ParseICSInfo(r, ics, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if ics.MaxSFB != 8 {
+		t.Errorf("MaxSFB: got %d, want 8", ics.MaxSFB)
+	}
+	if !ics.PredictorDataPresent {
+		t.Error("PredictorDataPresent should be true")
+	}
+	if ics.Pred.Limit != 8 {
+		t.Errorf("Pred.Limit: got %d, want 8", ics.Pred.Limit)
+	}
+	if ics.Pred.PredictorReset {
+		t.Error("Pred.PredictorReset should be false")
+	}
+	if ics.Pred.PredictorResetGroupNumber != 0 {
+		t.Errorf("Pred.PredictorResetGroupNumber: got %d, want 0", ics.Pred.PredictorResetGroupNumber)
+	}
+
+	// Check alternating pattern: 10101010 means bits 0,2,4,6 are set
+	expectedUsed := [8]bool{true, false, true, false, true, false, true, false}
+	for sfb := uint8(0); sfb < 8; sfb++ {
+		if ics.Pred.PredictionUsed[sfb] != expectedUsed[sfb] {
+			t.Errorf("Pred.PredictionUsed[%d]: got %v, want %v", sfb, ics.Pred.PredictionUsed[sfb], expectedUsed[sfb])
+		}
+	}
 }
 
 func TestParseICSInfo_LTPPrediction(t *testing.T) {
