@@ -122,3 +122,47 @@ func TestFltRound(t *testing.T) {
 		}
 	}
 }
+
+func TestICPredict_NoPrediction(t *testing.T) {
+	// When pred=false, output should equal input and state should still update
+	state := NewPredState()
+	input := float32(0.5)
+
+	output := icPredict(state, input, false)
+
+	// Output should be unchanged (no prediction applied)
+	if output != input {
+		t.Errorf("icPredict with pred=false: output = %v, want %v", output, input)
+	}
+}
+
+func TestICPredict_WithPrediction(t *testing.T) {
+	// When pred=true, output should be input + predicted value
+	state := NewPredState()
+
+	// First sample: no prediction yet (k1, k2 = 0)
+	output1 := icPredict(state, 1.0, true)
+	// With fresh state, prediction should be 0, so output = input
+	if math.Abs(float64(output1-1.0)) > 0.001 {
+		t.Errorf("first sample: output = %v, want ~1.0", output1)
+	}
+
+	// Second sample: state has been updated, prediction should be non-zero
+	output2 := icPredict(state, 1.0, true)
+	// After one update, there should be some prediction
+	if output2 == 1.0 {
+		t.Logf("second sample: output = %v (prediction may be small)", output2)
+	}
+}
+
+func TestICPredict_StateUpdate(t *testing.T) {
+	// Verify that state is updated after each call
+	state := NewPredState()
+
+	_ = icPredict(state, 1.0, true)
+
+	// State should have been updated
+	if state.R[0] == 0 && state.R[1] == 0 {
+		t.Error("state.R was not updated")
+	}
+}

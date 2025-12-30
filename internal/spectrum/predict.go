@@ -90,3 +90,77 @@ func invQuantPred(q int16) float32 {
 	u16 := uint16(q)
 	return bitsToFloat(uint32(u16) << 16)
 }
+
+// icPredict applies backward-adaptive prediction to one spectral coefficient.
+// If pred is true, the prediction is added to the input.
+// The state is always updated regardless of pred.
+//
+// Ported from: ic_predict() in ~/dev/faad2/libfaad/ic_predict.c:87-196
+func icPredict(state *PredState, input float32, pred bool) float32 {
+	// Dequantize state
+	r0 := invQuantPred(state.R[0])
+	r1 := invQuantPred(state.R[1])
+	cor0 := invQuantPred(state.COR[0])
+	cor1 := invQuantPred(state.COR[1])
+	var0 := invQuantPred(state.VAR[0])
+	var1 := invQuantPred(state.VAR[1])
+
+	// Calculate k1 coefficient using table lookup
+	var k1 float32
+	tmp := uint16(state.VAR[0])
+	j := int(tmp >> 7)
+	i := int(tmp & 0x7f)
+	if j >= 128 {
+		j -= 128
+		k1 = cor0 * expTable[j] * mntTable[i]
+	} else {
+		k1 = 0
+	}
+
+	var output float32
+	if pred {
+		// Calculate k2 coefficient
+		var k2 float32
+		tmp = uint16(state.VAR[1])
+		j = int(tmp >> 7)
+		i = int(tmp & 0x7f)
+		if j >= 128 {
+			j -= 128
+			k2 = cor1 * expTable[j] * mntTable[i]
+		} else {
+			k2 = 0
+		}
+
+		// Calculate predicted value
+		predictedValue := k1*r0 + k2*r1
+		predictedValue = fltRound(predictedValue)
+		output = input + predictedValue
+	} else {
+		output = input
+	}
+
+	// Calculate new state data
+	e0 := output
+	e1 := e0 - k1*r0
+	dr1 := k1 * e0
+
+	// Update variance and correlation
+	var0 = predAlpha*var0 + 0.5*(r0*r0+e0*e0)
+	cor0 = predAlpha*cor0 + r0*e0
+	var1 = predAlpha*var1 + 0.5*(r1*r1+e1*e1)
+	cor1 = predAlpha*cor1 + r1*e1
+
+	// Update predictor state
+	r1 = predA * (r0 - dr1)
+	r0 = predA * e0
+
+	// Quantize and store state
+	state.R[0] = quantPred(r0)
+	state.R[1] = quantPred(r1)
+	state.COR[0] = quantPred(cor0)
+	state.COR[1] = quantPred(cor1)
+	state.VAR[0] = quantPred(var0)
+	state.VAR[1] = quantPred(var1)
+
+	return output
+}
