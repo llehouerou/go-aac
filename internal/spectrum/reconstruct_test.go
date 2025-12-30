@@ -305,3 +305,72 @@ func TestReconstructSingleChannel_WithTNS(t *testing.T) {
 		t.Error("spectrum should have non-zero values after TNS")
 	}
 }
+
+func TestReconstructSingleChannel_MainProfile_ICPrediction(t *testing.T) {
+	ics := &syntax.ICStream{
+		NumWindowGroups:      1,
+		NumWindows:           1,
+		MaxSFB:               4,
+		NumSWB:               4,
+		WindowSequence:       syntax.OnlyLongSequence,
+		GlobalGain:           100,
+		PredictorDataPresent: true,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 4
+	ics.SWBOffset[2] = 8
+	ics.SWBOffset[3] = 12
+	ics.SWBOffset[4] = 16
+	ics.SWBOffsetMax = 1024
+	ics.SFBCB[0][0] = 1
+	ics.SFBCB[0][1] = 1
+	ics.SFBCB[0][2] = 1
+	ics.SFBCB[0][3] = 1
+	ics.ScaleFactors[0][0] = 100
+	ics.ScaleFactors[0][1] = 100
+	ics.ScaleFactors[0][2] = 100
+	ics.ScaleFactors[0][3] = 100
+
+	// Enable prediction for first 2 bands
+	ics.Pred.PredictionUsed[0] = true
+	ics.Pred.PredictionUsed[1] = true
+
+	// Create predictor state
+	predState := make([]PredState, 1024)
+	ResetAllPredictors(predState, 1024)
+
+	cfg := &ReconstructSingleChannelConfig{
+		ICS:         ics,
+		Element:     &syntax.Element{},
+		FrameLength: 1024,
+		ObjectType:  aac.ObjectTypeMain, // MAIN profile
+		SRIndex:     4,
+		PNSState:    NewPNSState(),
+		PredState:   predState,
+	}
+
+	quantData := make([]int16, 1024)
+	for i := 0; i < 16; i++ {
+		quantData[i] = int16(i + 1)
+	}
+
+	specData := make([]float64, 1024)
+
+	err := ReconstructSingleChannel(quantData, specData, cfg)
+	if err != nil {
+		t.Fatalf("ReconstructSingleChannel failed: %v", err)
+	}
+
+	// Predictor state should be updated
+	stateUpdated := false
+	for i := 0; i < 16; i++ {
+		if predState[i].R[0] != 0 || predState[i].R[1] != 0 {
+			stateUpdated = true
+			break
+		}
+	}
+	if !stateUpdated {
+		t.Error("predictor state should be updated")
+	}
+}
