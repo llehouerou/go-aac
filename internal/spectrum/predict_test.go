@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/llehouerou/go-aac/internal/huffman"
 	"github.com/llehouerou/go-aac/internal/syntax"
 )
 
@@ -316,5 +317,62 @@ func TestICPrediction_PredictorResetGroup2(t *testing.T) {
 		if states[bin].R[0] == 0 {
 			t.Errorf("states[%d].R[0] = 0, should not be reset", bin)
 		}
+	}
+}
+
+func TestPNSResetPredState(t *testing.T) {
+	frameLen := uint16(1024)
+	states := make([]PredState, frameLen)
+
+	// Set non-zero values
+	for i := range states {
+		states[i].R[0] = 100
+	}
+
+	ics := &syntax.ICStream{
+		WindowSequence:    syntax.OnlyLongSequence,
+		NumWindowGroups:   1,
+		WindowGroupLength: [8]uint8{1},
+		MaxSFB:            5,
+		SWBOffsetMax:      100,
+	}
+	// Set up SWB offsets
+	for i := 0; i <= 5; i++ {
+		ics.SWBOffset[i] = uint16(i * 20)
+	}
+	// Set SFB 2 to use noise codebook
+	ics.SFBCB[0][2] = uint8(huffman.NoiseHCB)
+
+	PNSResetPredState(ics, states)
+
+	// States in SFB 2 (bins 40-59) should be reset
+	for bin := 40; bin < 60; bin++ {
+		if states[bin].R[0] != 0 {
+			t.Errorf("states[%d].R[0] = %d, want 0 (noise band)", bin, states[bin].R[0])
+		}
+	}
+
+	// States in other SFBs should not be reset
+	if states[0].R[0] != 100 {
+		t.Errorf("states[0].R[0] = %d, want 100 (non-noise band)", states[0].R[0])
+	}
+}
+
+func TestPNSResetPredState_ShortSequence(t *testing.T) {
+	// Short sequences should return early without doing anything
+	states := make([]PredState, 1024)
+	for i := range states {
+		states[i].R[0] = 100
+	}
+
+	ics := &syntax.ICStream{
+		WindowSequence: syntax.EightShortSequence,
+	}
+
+	PNSResetPredState(ics, states)
+
+	// States should be unchanged
+	if states[0].R[0] != 100 {
+		t.Errorf("states[0].R[0] = %d, want 100 (short sequence, no reset)", states[0].R[0])
 	}
 }

@@ -170,6 +170,36 @@ func icPredict(state *PredState, input float32, pred bool) float32 {
 	return output
 }
 
+// PNSResetPredState resets predictor states for bands that use PNS (noise) coding.
+// This is called after PNS decoding to prevent prediction from affecting noise bands.
+// Only applies to long blocks.
+//
+// Ported from: pns_reset_pred_state() in ~/dev/faad2/libfaad/ic_predict.c:208-234
+func PNSResetPredState(ics *syntax.ICStream, states []PredState) {
+	// Prediction only for long blocks
+	if ics.WindowSequence == syntax.EightShortSequence {
+		return
+	}
+
+	for g := uint8(0); g < ics.NumWindowGroups; g++ {
+		for b := uint8(0); b < ics.WindowGroupLength[g]; b++ {
+			for sfb := uint8(0); sfb < ics.MaxSFB; sfb++ {
+				if IsNoiseICS(ics, g, sfb) {
+					offs := ics.SWBOffset[sfb]
+					offs2 := ics.SWBOffset[sfb+1]
+					if offs2 > ics.SWBOffsetMax {
+						offs2 = ics.SWBOffsetMax
+					}
+
+					for i := offs; i < offs2 && int(i) < len(states); i++ {
+						ResetPredState(&states[i])
+					}
+				}
+			}
+		}
+	}
+}
+
 // ICPrediction applies intra-channel prediction to the spectral coefficients.
 // For short sequences, all predictors are reset.
 // For long sequences, prediction is applied per SFB based on prediction_used flags.
