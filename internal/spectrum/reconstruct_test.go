@@ -425,3 +425,61 @@ func TestReconstructSingleChannel_LTPProfile(t *testing.T) {
 		t.Fatalf("ReconstructSingleChannel failed: %v", err)
 	}
 }
+
+func TestReconstructSingleChannel_ShortBlocks(t *testing.T) {
+	ics := &syntax.ICStream{
+		NumWindowGroups: 2,
+		NumWindows:      8,
+		MaxSFB:          2,
+		NumSWB:          2,
+		WindowSequence:  syntax.EightShortSequence,
+		GlobalGain:      100,
+	}
+	ics.WindowGroupLength[0] = 4
+	ics.WindowGroupLength[1] = 4
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 4
+	ics.SWBOffset[2] = 8
+	ics.SWBOffsetMax = 128 // 1024/8 for short blocks
+	ics.SFBCB[0][0] = 1
+	ics.SFBCB[0][1] = 1
+	ics.SFBCB[1][0] = 1
+	ics.SFBCB[1][1] = 1
+	ics.ScaleFactors[0][0] = 100
+	ics.ScaleFactors[0][1] = 100
+	ics.ScaleFactors[1][0] = 100
+	ics.ScaleFactors[1][1] = 100
+
+	cfg := &ReconstructSingleChannelConfig{
+		ICS:         ics,
+		Element:     &syntax.Element{},
+		FrameLength: 1024,
+		ObjectType:  aac.ObjectTypeLC,
+		SRIndex:     4,
+		PNSState:    NewPNSState(),
+	}
+
+	quantData := make([]int16, 1024)
+	for i := 0; i < 64; i++ {
+		quantData[i] = 1
+	}
+
+	specData := make([]float64, 1024)
+
+	err := ReconstructSingleChannel(quantData, specData, cfg)
+	if err != nil {
+		t.Fatalf("ReconstructSingleChannel failed: %v", err)
+	}
+
+	// Verify output has values
+	hasValue := false
+	for i := 0; i < 64; i++ {
+		if specData[i] != 0 {
+			hasValue = true
+			break
+		}
+	}
+	if !hasValue {
+		t.Error("short block processing should produce non-zero values")
+	}
+}
