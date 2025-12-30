@@ -2,7 +2,12 @@
 
 package spectrum
 
-import "math"
+import (
+	"math"
+
+	"github.com/llehouerou/go-aac/internal/syntax"
+	"github.com/llehouerou/go-aac/internal/tables"
+)
 
 // PredState holds the state for one spectral coefficient's predictor.
 // The values are quantized to 16-bit for memory efficiency and stability.
@@ -163,4 +168,46 @@ func icPredict(state *PredState, input float32, pred bool) float32 {
 	state.VAR[1] = quantPred(var1)
 
 	return output
+}
+
+// ICPrediction applies intra-channel prediction to the spectral coefficients.
+// For short sequences, all predictors are reset.
+// For long sequences, prediction is applied per SFB based on prediction_used flags.
+//
+// Ported from: ic_prediction() in ~/dev/faad2/libfaad/ic_predict.c:245-279
+func ICPrediction(ics *syntax.ICStream, spec []float32, states []PredState, frameLen uint16, sfIndex uint8) {
+	if ics.WindowSequence == syntax.EightShortSequence {
+		// Short sequence: reset all predictors
+		ResetAllPredictors(states, frameLen)
+		return
+	}
+
+	// Long sequence: apply prediction per SFB
+	maxPredSfb := tables.MaxPredSFB(sfIndex)
+
+	for sfb := uint8(0); sfb < maxPredSfb; sfb++ {
+		low := ics.SWBOffset[sfb]
+		high := ics.SWBOffset[sfb+1]
+		if high > ics.SWBOffsetMax {
+			high = ics.SWBOffsetMax
+		}
+
+		// Determine if prediction is used for this SFB
+		usePred := ics.PredictorDataPresent && ics.Pred.PredictionUsed[sfb]
+
+		for bin := low; bin < high && int(bin) < len(spec) && int(bin) < len(states); bin++ {
+			spec[bin] = icPredict(&states[bin], spec[bin], usePred)
+		}
+	}
+
+	// Handle predictor reset groups
+	if ics.PredictorDataPresent && ics.Pred.PredictorReset {
+		resetGroup := ics.Pred.PredictorResetGroupNumber
+		if resetGroup > 0 {
+			// Reset every 30th predictor starting from (resetGroup - 1)
+			for bin := uint16(resetGroup - 1); bin < frameLen && int(bin) < len(states); bin += 30 {
+				ResetPredState(&states[bin])
+			}
+		}
+	}
 }

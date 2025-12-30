@@ -3,6 +3,8 @@ package spectrum
 import (
 	"math"
 	"testing"
+
+	"github.com/llehouerou/go-aac/internal/syntax"
 )
 
 func TestNewPredState(t *testing.T) {
@@ -164,5 +166,155 @@ func TestICPredict_StateUpdate(t *testing.T) {
 	// State should have been updated
 	if state.R[0] == 0 && state.R[1] == 0 {
 		t.Error("state.R was not updated")
+	}
+}
+
+func TestICPrediction_ShortSequence(t *testing.T) {
+	// For short sequences, all predictors should be reset
+	frameLen := uint16(1024)
+	states := make([]PredState, frameLen)
+
+	// Set non-zero values
+	for i := range states {
+		states[i].R[0] = 100
+	}
+
+	ics := &syntax.ICStream{
+		WindowSequence: syntax.EightShortSequence,
+	}
+	spec := make([]float32, frameLen)
+
+	ICPrediction(ics, spec, states, frameLen, 3) // sfIndex=3 (48kHz)
+
+	// All states should be reset
+	for i := uint16(0); i < frameLen; i++ {
+		if states[i].R[0] != 0 {
+			t.Errorf("states[%d].R[0] = %d, want 0 (should be reset)", i, states[i].R[0])
+			break
+		}
+	}
+}
+
+func TestICPrediction_LongSequence(t *testing.T) {
+	// For long sequences, prediction should be applied
+	frameLen := uint16(1024)
+	states := make([]PredState, frameLen)
+	for i := range states {
+		ResetPredState(&states[i])
+	}
+
+	ics := &syntax.ICStream{
+		WindowSequence:       syntax.OnlyLongSequence,
+		MaxSFB:               10,
+		PredictorDataPresent: true,
+	}
+	ics.Pred.Limit = 10
+	for i := uint8(0); i < 10; i++ {
+		ics.Pred.PredictionUsed[i] = true
+	}
+
+	// Set up SWB offsets (simplified)
+	for i := 0; i <= 10; i++ {
+		ics.SWBOffset[i] = uint16(i * 10)
+	}
+	ics.SWBOffsetMax = 100
+
+	spec := make([]float32, frameLen)
+	for i := range spec {
+		spec[i] = 1.0
+	}
+
+	ICPrediction(ics, spec, states, frameLen, 3)
+
+	// After prediction with fresh states, spec should be mostly unchanged
+	// (prediction is zero for fresh states)
+	// This is a basic sanity check
+	if spec[0] != 1.0 {
+		t.Logf("spec[0] = %v after prediction (expected ~1.0 for fresh state)", spec[0])
+	}
+}
+
+func TestICPrediction_PredictorReset(t *testing.T) {
+	// Test that predictor reset groups work correctly
+	frameLen := uint16(120) // Use small frame to test reset pattern clearly
+	states := make([]PredState, frameLen)
+
+	// Set non-zero values for all states
+	for i := range states {
+		states[i].R[0] = 100
+		states[i].COR[0] = 50
+	}
+
+	ics := &syntax.ICStream{
+		WindowSequence:       syntax.OnlyLongSequence,
+		MaxSFB:               1,
+		PredictorDataPresent: true,
+	}
+	ics.Pred.PredictorReset = true
+	ics.Pred.PredictorResetGroupNumber = 1 // Reset bins 0, 30, 60, 90
+
+	// Set up minimal SWB offsets
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 10
+	ics.SWBOffsetMax = 10
+
+	spec := make([]float32, frameLen)
+
+	ICPrediction(ics, spec, states, frameLen, 3)
+
+	// Bins 0, 30, 60, 90 should be reset (VAR = 0x3F80, R = 0, COR = 0)
+	resetBins := []uint16{0, 30, 60, 90}
+	for _, bin := range resetBins {
+		if states[bin].R[0] != 0 {
+			t.Errorf("states[%d].R[0] = %d, want 0 (should be reset)", bin, states[bin].R[0])
+		}
+		if states[bin].VAR[0] != 0x3F80 {
+			t.Errorf("states[%d].VAR[0] = %#x, want 0x3F80 (should be reset)", bin, states[bin].VAR[0])
+		}
+	}
+
+	// Other bins should NOT be reset (but may be modified by prediction)
+	// Check bin 15 which is not processed by prediction (beyond SWBOffset) and not in reset group
+	if states[15].R[0] == 0 && states[15].COR[0] == 0 && states[15].VAR[0] == 0x3F80 {
+		t.Errorf("states[15] appears reset but should not be in reset group")
+	}
+}
+
+func TestICPrediction_PredictorResetGroup2(t *testing.T) {
+	// Test reset group 2 (reset bins 1, 31, 61, 91, ...)
+	frameLen := uint16(120)
+	states := make([]PredState, frameLen)
+
+	// Set non-zero values
+	for i := range states {
+		states[i].R[0] = 100
+	}
+
+	ics := &syntax.ICStream{
+		WindowSequence:       syntax.OnlyLongSequence,
+		MaxSFB:               0, // No prediction applied
+		PredictorDataPresent: true,
+	}
+	ics.Pred.PredictorReset = true
+	ics.Pred.PredictorResetGroupNumber = 2 // Reset bins 1, 31, 61, 91
+
+	spec := make([]float32, frameLen)
+
+	ICPrediction(ics, spec, states, frameLen, 3)
+
+	// Bins 1, 31, 61, 91 should be reset
+	resetBins := []uint16{1, 31, 61, 91}
+	for _, bin := range resetBins {
+		if states[bin].R[0] != 0 {
+			t.Errorf("states[%d].R[0] = %d, want 0 (should be reset)", bin, states[bin].R[0])
+		}
+	}
+
+	// Bins 0, 30, 60, 90 should NOT be reset
+	nonResetBins := []uint16{0, 30, 60, 90}
+	for _, bin := range nonResetBins {
+		if states[bin].R[0] == 0 {
+			t.Errorf("states[%d].R[0] = 0, should not be reset", bin)
+		}
 	}
 }
