@@ -565,3 +565,81 @@ func TestReconstructChannelPair_BasicStereo(t *testing.T) {
 		t.Error("both channels should have non-zero output")
 	}
 }
+
+func TestReconstructChannelPair_WithMSStereo(t *testing.T) {
+	ics1 := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          2,
+		NumSWB:          2,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+		MSMaskPresent:   2, // All bands use M/S
+	}
+	ics1.WindowGroupLength[0] = 1
+	ics1.SWBOffset[0] = 0
+	ics1.SWBOffset[1] = 4
+	ics1.SWBOffset[2] = 8
+	ics1.SWBOffsetMax = 1024
+	ics1.SFBCB[0][0] = 1
+	ics1.SFBCB[0][1] = 1
+	ics1.ScaleFactors[0][0] = 100
+	ics1.ScaleFactors[0][1] = 100
+
+	ics2 := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          2,
+		NumSWB:          2,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+	}
+	ics2.WindowGroupLength[0] = 1
+	ics2.SWBOffset[0] = 0
+	ics2.SWBOffset[1] = 4
+	ics2.SWBOffset[2] = 8
+	ics2.SWBOffsetMax = 1024
+	ics2.SFBCB[0][0] = 1
+	ics2.SFBCB[0][1] = 1
+	ics2.ScaleFactors[0][0] = 100
+	ics2.ScaleFactors[0][1] = 100
+
+	ele := &syntax.Element{CommonWindow: true}
+
+	cfg := &ReconstructChannelPairConfig{
+		ICS1:        ics1,
+		ICS2:        ics2,
+		Element:     ele,
+		FrameLength: 1024,
+		ObjectType:  aac.ObjectTypeLC,
+		SRIndex:     4,
+		PNSState:    NewPNSState(),
+	}
+
+	// Create M/S encoded data: M=10, S=2
+	// Expected output: L = M + S = 12, R = M - S = 8
+	quantData1 := make([]int16, 1024)
+	quantData2 := make([]int16, 1024)
+	quantData1[0] = 10 // Mid
+	quantData2[0] = 2  // Side
+
+	specData1 := make([]float64, 1024)
+	specData2 := make([]float64, 1024)
+
+	err := ReconstructChannelPair(quantData1, quantData2, specData1, specData2, cfg)
+	if err != nil {
+		t.Fatalf("ReconstructChannelPair failed: %v", err)
+	}
+
+	// After M/S decode: L should be different from R
+	// M/S transform: L = M + S, R = M - S
+	// Since we have non-zero M and S, L != R
+	if specData1[0] == specData2[0] {
+		t.Error("M/S stereo should produce different L and R values")
+	}
+
+	// L should be > R since M > 0 and S > 0
+	if specData1[0] <= specData2[0] {
+		t.Errorf("L (%f) should be > R (%f) with positive M and S", specData1[0], specData2[0])
+	}
+}
