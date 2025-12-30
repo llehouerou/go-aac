@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/llehouerou/go-aac"
+	"github.com/llehouerou/go-aac/internal/huffman"
 	"github.com/llehouerou/go-aac/internal/syntax"
 )
 
@@ -182,5 +183,56 @@ func TestReconstructSingleChannel_PulseInShortBlock_Error(t *testing.T) {
 	}
 	if err != syntax.ErrPulseInShortBlock {
 		t.Errorf("got error %v, want ErrPulseInShortBlock", err)
+	}
+}
+
+func TestReconstructSingleChannel_WithNoiseBand(t *testing.T) {
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          2,
+		NumSWB:          2,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 8
+	ics.SWBOffset[2] = 16
+	ics.SWBOffsetMax = 1024
+
+	// First band: noise, second band: normal
+	ics.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+	ics.SFBCB[0][1] = 1
+	ics.ScaleFactors[0][0] = 0 // Noise scale
+	ics.ScaleFactors[0][1] = 100
+
+	cfg := &ReconstructSingleChannelConfig{
+		ICS:         ics,
+		Element:     &syntax.Element{},
+		FrameLength: 1024,
+		ObjectType:  aac.ObjectTypeLC,
+		SRIndex:     4,
+		PNSState:    NewPNSState(),
+	}
+
+	quantData := make([]int16, 1024)
+	specData := make([]float64, 1024)
+
+	err := ReconstructSingleChannel(quantData, specData, cfg)
+	if err != nil {
+		t.Fatalf("ReconstructSingleChannel failed: %v", err)
+	}
+
+	// First 8 samples should have noise (non-zero)
+	hasNoise := false
+	for i := 0; i < 8; i++ {
+		if specData[i] != 0 {
+			hasNoise = true
+			break
+		}
+	}
+	if !hasNoise {
+		t.Error("noise band should have non-zero values")
 	}
 }
