@@ -992,3 +992,86 @@ func TestReconstructChannelPair_MainProfile_ICPrediction(t *testing.T) {
 		t.Error("predictor state should be updated for both channels")
 	}
 }
+
+func TestReconstructChannelPair_CorrelatedPNS(t *testing.T) {
+	ics1 := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          2,
+		NumSWB:          2,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+		MSMaskPresent:   2, // All bands - enables PNS correlation
+	}
+	ics1.WindowGroupLength[0] = 1
+	ics1.SWBOffset[0] = 0
+	ics1.SWBOffset[1] = 8
+	ics1.SWBOffset[2] = 16
+	ics1.SWBOffsetMax = 1024
+	// Both bands are noise
+	ics1.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+	ics1.SFBCB[0][1] = uint8(huffman.NoiseHCB)
+	ics1.ScaleFactors[0][0] = 0
+	ics1.ScaleFactors[0][1] = 0
+
+	ics2 := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          2,
+		NumSWB:          2,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+	}
+	ics2.WindowGroupLength[0] = 1
+	ics2.SWBOffset[0] = 0
+	ics2.SWBOffset[1] = 8
+	ics2.SWBOffset[2] = 16
+	ics2.SWBOffsetMax = 1024
+	// Both bands are noise
+	ics2.SFBCB[0][0] = uint8(huffman.NoiseHCB)
+	ics2.SFBCB[0][1] = uint8(huffman.NoiseHCB)
+	ics2.ScaleFactors[0][0] = 0
+	ics2.ScaleFactors[0][1] = 0
+
+	ele := &syntax.Element{CommonWindow: true}
+
+	cfg := &ReconstructChannelPairConfig{
+		ICS1:        ics1,
+		ICS2:        ics2,
+		Element:     ele,
+		FrameLength: 1024,
+		ObjectType:  aac.ObjectTypeLC,
+		SRIndex:     4,
+		PNSState:    NewPNSState(),
+	}
+
+	quantData1 := make([]int16, 1024)
+	quantData2 := make([]int16, 1024)
+
+	specData1 := make([]float64, 1024)
+	specData2 := make([]float64, 1024)
+
+	err := ReconstructChannelPair(quantData1, quantData2, specData1, specData2, cfg)
+	if err != nil {
+		t.Fatalf("ReconstructChannelPair failed: %v", err)
+	}
+
+	// With ms_mask_present=2, PNS should be correlated (same random sequence)
+	// The noise values should be proportional (same pattern, possibly different scale)
+	// Check that the ratio is consistent across samples
+	if specData1[0] == 0 || specData2[0] == 0 {
+		t.Skip("PNS generated zero - need non-zero for correlation test")
+	}
+
+	ratio := specData1[0] / specData2[0]
+	for i := 1; i < 8; i++ {
+		if specData2[i] == 0 {
+			continue
+		}
+		thisRatio := specData1[i] / specData2[i]
+		// Allow small tolerance for floating point
+		if (thisRatio-ratio)/ratio > 0.01 || (thisRatio-ratio)/ratio < -0.01 {
+			t.Errorf("sample %d: ratio %f differs from expected %f", i, thisRatio, ratio)
+		}
+	}
+}
