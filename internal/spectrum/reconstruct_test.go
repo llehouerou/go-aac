@@ -374,3 +374,54 @@ func TestReconstructSingleChannel_MainProfile_ICPrediction(t *testing.T) {
 		t.Error("predictor state should be updated")
 	}
 }
+
+func TestReconstructSingleChannel_LTPProfile(t *testing.T) {
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          4,
+		NumSWB:          4,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 4
+	ics.SWBOffset[2] = 8
+	ics.SWBOffset[3] = 12
+	ics.SWBOffset[4] = 16
+	ics.SWBOffsetMax = 1024
+	ics.SFBCB[0][0] = 1
+	ics.ScaleFactors[0][0] = 100
+
+	// Enable LTP
+	ics.LTP.DataPresent = true
+	ics.LTP.Lag = 1024
+	ics.LTP.Coef = 4
+	ics.LTP.LastBand = 4
+	ics.LTP.LongUsed[0] = true
+	ics.LTP.LongUsed[1] = true
+
+	// Create LTP state (empty for this test)
+	ltpState := make([]int16, 4*1024)
+
+	cfg := &ReconstructSingleChannelConfig{
+		ICS:         ics,
+		Element:     &syntax.Element{},
+		FrameLength: 1024,
+		ObjectType:  aac.ObjectTypeLTP, // LTP profile
+		SRIndex:     4,
+		PNSState:    NewPNSState(),
+		LTPState:    ltpState,
+		// LTPFilterBank is nil, so LTP will be skipped
+	}
+
+	quantData := make([]int16, 1024)
+	specData := make([]float64, 1024)
+
+	// Should succeed (LTP skipped due to no filterbank)
+	err := ReconstructSingleChannel(quantData, specData, cfg)
+	if err != nil {
+		t.Fatalf("ReconstructSingleChannel failed: %v", err)
+	}
+}
