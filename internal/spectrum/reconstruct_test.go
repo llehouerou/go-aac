@@ -644,6 +644,78 @@ func TestReconstructChannelPair_WithMSStereo(t *testing.T) {
 	}
 }
 
+func TestReconstructChannelPair_WithIntensityStereo(t *testing.T) {
+	ics1 := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          2,
+		NumSWB:          2,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+		MSMaskPresent:   0, // No M/S
+	}
+	ics1.WindowGroupLength[0] = 1
+	ics1.SWBOffset[0] = 0
+	ics1.SWBOffset[1] = 4
+	ics1.SWBOffset[2] = 8
+	ics1.SWBOffsetMax = 1024
+	ics1.SFBCB[0][0] = 1
+	ics1.SFBCB[0][1] = 1
+	ics1.ScaleFactors[0][0] = 100
+	ics1.ScaleFactors[0][1] = 100
+
+	ics2 := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          2,
+		NumSWB:          2,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+	}
+	ics2.WindowGroupLength[0] = 1
+	ics2.SWBOffset[0] = 0
+	ics2.SWBOffset[1] = 4
+	ics2.SWBOffset[2] = 8
+	ics2.SWBOffsetMax = 1024
+	// First band: normal, second band: intensity stereo
+	ics2.SFBCB[0][0] = 1
+	ics2.SFBCB[0][1] = uint8(huffman.IntensityHCB) // 15 = intensity stereo
+	ics2.ScaleFactors[0][0] = 100
+	ics2.ScaleFactors[0][1] = 0 // IS scale factor
+
+	ele := &syntax.Element{CommonWindow: false}
+
+	cfg := &ReconstructChannelPairConfig{
+		ICS1:        ics1,
+		ICS2:        ics2,
+		Element:     ele,
+		FrameLength: 1024,
+		ObjectType:  aac.ObjectTypeLC,
+		SRIndex:     4,
+		PNSState:    NewPNSState(),
+	}
+
+	quantData1 := make([]int16, 1024)
+	quantData2 := make([]int16, 1024)
+	// Left channel has data in band 1 (indices 4-7)
+	quantData1[4] = 10
+	quantData1[5] = 10
+	// Right channel has no data in band 1 (will be copied from left via IS)
+
+	specData1 := make([]float64, 1024)
+	specData2 := make([]float64, 1024)
+
+	err := ReconstructChannelPair(quantData1, quantData2, specData1, specData2, cfg)
+	if err != nil {
+		t.Fatalf("ReconstructChannelPair failed: %v", err)
+	}
+
+	// Second band (indices 4-7) should have IS-scaled copy in right channel
+	if specData2[4] == 0 {
+		t.Error("intensity stereo should copy scaled values from left to right")
+	}
+}
+
 func TestReconstructChannelPair_ShortBlocks(t *testing.T) {
 	ics1 := &syntax.ICStream{
 		NumWindowGroups: 2,
