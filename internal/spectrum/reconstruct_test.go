@@ -1075,3 +1075,82 @@ func TestReconstructChannelPair_CorrelatedPNS(t *testing.T) {
 		}
 	}
 }
+
+func TestReconstructChannelPair_LTPProfile_CommonWindow(t *testing.T) {
+	ics1 := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          4,
+		NumSWB:          4,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+	}
+	ics1.WindowGroupLength[0] = 1
+	ics1.SWBOffset[0] = 0
+	ics1.SWBOffset[1] = 4
+	ics1.SWBOffset[2] = 8
+	ics1.SWBOffset[3] = 12
+	ics1.SWBOffset[4] = 16
+	ics1.SWBOffsetMax = 1024
+	ics1.SFBCB[0][0] = 1
+	ics1.ScaleFactors[0][0] = 100
+	ics1.LTP.DataPresent = true
+	ics1.LTP.Lag = 1024
+	ics1.LTP.Coef = 4
+	ics1.LTP.LastBand = 4
+	ics1.LTP.LongUsed[0] = true
+
+	ics2 := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          4,
+		NumSWB:          4,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+	}
+	ics2.WindowGroupLength[0] = 1
+	ics2.SWBOffset[0] = 0
+	ics2.SWBOffset[1] = 4
+	ics2.SWBOffset[2] = 8
+	ics2.SWBOffset[3] = 12
+	ics2.SWBOffset[4] = 16
+	ics2.SWBOffsetMax = 1024
+	ics2.SFBCB[0][0] = 1
+	ics2.ScaleFactors[0][0] = 100
+	// LTP2 is used for second channel with common_window
+	ics2.LTP2.DataPresent = true
+	ics2.LTP2.Lag = 1024
+	ics2.LTP2.Coef = 4
+	ics2.LTP2.LastBand = 4
+	ics2.LTP2.LongUsed[0] = true
+
+	ltpState1 := make([]int16, 4*1024)
+	ltpState2 := make([]int16, 4*1024)
+
+	ele := &syntax.Element{CommonWindow: true}
+
+	cfg := &ReconstructChannelPairConfig{
+		ICS1:        ics1,
+		ICS2:        ics2,
+		Element:     ele,
+		FrameLength: 1024,
+		ObjectType:  aac.ObjectTypeLTP,
+		SRIndex:     4,
+		PNSState:    NewPNSState(),
+		LTPState1:   ltpState1,
+		LTPState2:   ltpState2,
+		// LTPFilterBank is nil, so LTP will be skipped
+	}
+
+	quantData1 := make([]int16, 1024)
+	quantData2 := make([]int16, 1024)
+
+	specData1 := make([]float64, 1024)
+	specData2 := make([]float64, 1024)
+
+	// Should succeed even without filterbank (LTP skipped)
+	err := ReconstructChannelPair(quantData1, quantData2, specData1, specData2, cfg)
+	if err != nil {
+		t.Fatalf("ReconstructChannelPair failed: %v", err)
+	}
+}
