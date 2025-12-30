@@ -643,3 +643,280 @@ func TestReconstructChannelPair_WithMSStereo(t *testing.T) {
 		t.Errorf("L (%f) should be > R (%f) with positive M and S", specData1[0], specData2[0])
 	}
 }
+
+func TestReconstructChannelPair_ShortBlocks(t *testing.T) {
+	ics1 := &syntax.ICStream{
+		NumWindowGroups: 2,
+		NumWindows:      8,
+		MaxSFB:          2,
+		NumSWB:          2,
+		WindowSequence:  syntax.EightShortSequence,
+		GlobalGain:      100,
+	}
+	ics1.WindowGroupLength[0] = 4
+	ics1.WindowGroupLength[1] = 4
+	ics1.SWBOffset[0] = 0
+	ics1.SWBOffset[1] = 4
+	ics1.SWBOffset[2] = 8
+	ics1.SWBOffsetMax = 128
+	ics1.SFBCB[0][0] = 1
+	ics1.SFBCB[0][1] = 1
+	ics1.SFBCB[1][0] = 1
+	ics1.SFBCB[1][1] = 1
+	ics1.ScaleFactors[0][0] = 100
+	ics1.ScaleFactors[0][1] = 100
+	ics1.ScaleFactors[1][0] = 100
+	ics1.ScaleFactors[1][1] = 100
+
+	ics2 := &syntax.ICStream{
+		NumWindowGroups: 2,
+		NumWindows:      8,
+		MaxSFB:          2,
+		NumSWB:          2,
+		WindowSequence:  syntax.EightShortSequence,
+		GlobalGain:      100,
+	}
+	ics2.WindowGroupLength[0] = 4
+	ics2.WindowGroupLength[1] = 4
+	ics2.SWBOffset[0] = 0
+	ics2.SWBOffset[1] = 4
+	ics2.SWBOffset[2] = 8
+	ics2.SWBOffsetMax = 128
+	ics2.SFBCB[0][0] = 1
+	ics2.SFBCB[0][1] = 1
+	ics2.SFBCB[1][0] = 1
+	ics2.SFBCB[1][1] = 1
+	ics2.ScaleFactors[0][0] = 100
+	ics2.ScaleFactors[0][1] = 100
+	ics2.ScaleFactors[1][0] = 100
+	ics2.ScaleFactors[1][1] = 100
+
+	ele := &syntax.Element{CommonWindow: false}
+
+	cfg := &ReconstructChannelPairConfig{
+		ICS1:        ics1,
+		ICS2:        ics2,
+		Element:     ele,
+		FrameLength: 1024,
+		ObjectType:  aac.ObjectTypeLC,
+		SRIndex:     4,
+		PNSState:    NewPNSState(),
+	}
+
+	quantData1 := make([]int16, 1024)
+	quantData2 := make([]int16, 1024)
+	for i := 0; i < 64; i++ {
+		quantData1[i] = 1
+		quantData2[i] = 1
+	}
+
+	specData1 := make([]float64, 1024)
+	specData2 := make([]float64, 1024)
+
+	err := ReconstructChannelPair(quantData1, quantData2, specData1, specData2, cfg)
+	if err != nil {
+		t.Fatalf("ReconstructChannelPair failed: %v", err)
+	}
+
+	// Verify both channels have values
+	hasValue1 := false
+	hasValue2 := false
+	for i := 0; i < 64; i++ {
+		if specData1[i] != 0 {
+			hasValue1 = true
+		}
+		if specData2[i] != 0 {
+			hasValue2 = true
+		}
+	}
+	if !hasValue1 || !hasValue2 {
+		t.Error("short block processing should produce non-zero values in both channels")
+	}
+}
+
+func TestReconstructChannelPair_WithTNS(t *testing.T) {
+	ics1 := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          4,
+		NumSWB:          4,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+		TNSDataPresent:  true,
+	}
+	ics1.WindowGroupLength[0] = 1
+	ics1.SWBOffset[0] = 0
+	ics1.SWBOffset[1] = 8
+	ics1.SWBOffset[2] = 16
+	ics1.SWBOffset[3] = 24
+	ics1.SWBOffset[4] = 32
+	ics1.SWBOffsetMax = 1024
+	ics1.SFBCB[0][0] = 1
+	ics1.ScaleFactors[0][0] = 100
+	ics1.TNS.NFilt[0] = 1
+	ics1.TNS.Length[0][0] = 4
+	ics1.TNS.Order[0][0] = 1
+	ics1.TNS.Direction[0][0] = 0
+	ics1.TNS.CoefRes[0] = 1
+	ics1.TNS.Coef[0][0][0] = 4
+
+	ics2 := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          4,
+		NumSWB:          4,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+		TNSDataPresent:  true,
+	}
+	ics2.WindowGroupLength[0] = 1
+	ics2.SWBOffset[0] = 0
+	ics2.SWBOffset[1] = 8
+	ics2.SWBOffset[2] = 16
+	ics2.SWBOffset[3] = 24
+	ics2.SWBOffset[4] = 32
+	ics2.SWBOffsetMax = 1024
+	ics2.SFBCB[0][0] = 1
+	ics2.ScaleFactors[0][0] = 100
+	ics2.TNS.NFilt[0] = 1
+	ics2.TNS.Length[0][0] = 4
+	ics2.TNS.Order[0][0] = 1
+	ics2.TNS.Direction[0][0] = 0
+	ics2.TNS.CoefRes[0] = 1
+	ics2.TNS.Coef[0][0][0] = 4
+
+	ele := &syntax.Element{CommonWindow: false}
+
+	cfg := &ReconstructChannelPairConfig{
+		ICS1:        ics1,
+		ICS2:        ics2,
+		Element:     ele,
+		FrameLength: 1024,
+		ObjectType:  aac.ObjectTypeLC,
+		SRIndex:     4,
+		PNSState:    NewPNSState(),
+	}
+
+	quantData1 := make([]int16, 1024)
+	quantData2 := make([]int16, 1024)
+	for i := 0; i < 32; i++ {
+		quantData1[i] = 10
+		quantData2[i] = 10
+	}
+
+	specData1 := make([]float64, 1024)
+	specData2 := make([]float64, 1024)
+
+	err := ReconstructChannelPair(quantData1, quantData2, specData1, specData2, cfg)
+	if err != nil {
+		t.Fatalf("ReconstructChannelPair failed: %v", err)
+	}
+
+	// TNS should have modified both channels
+	hasValue1 := false
+	hasValue2 := false
+	for i := 0; i < 32; i++ {
+		if specData1[i] != 0 {
+			hasValue1 = true
+		}
+		if specData2[i] != 0 {
+			hasValue2 = true
+		}
+	}
+	if !hasValue1 || !hasValue2 {
+		t.Error("TNS should produce non-zero values in both channels")
+	}
+}
+
+func TestReconstructChannelPair_MainProfile_ICPrediction(t *testing.T) {
+	ics1 := &syntax.ICStream{
+		NumWindowGroups:      1,
+		NumWindows:           1,
+		MaxSFB:               4,
+		NumSWB:               4,
+		WindowSequence:       syntax.OnlyLongSequence,
+		GlobalGain:           100,
+		PredictorDataPresent: true,
+	}
+	ics1.WindowGroupLength[0] = 1
+	ics1.SWBOffset[0] = 0
+	ics1.SWBOffset[1] = 4
+	ics1.SWBOffset[2] = 8
+	ics1.SWBOffset[3] = 12
+	ics1.SWBOffset[4] = 16
+	ics1.SWBOffsetMax = 1024
+	ics1.SFBCB[0][0] = 1
+	ics1.ScaleFactors[0][0] = 100
+	ics1.Pred.PredictionUsed[0] = true
+	ics1.Pred.PredictionUsed[1] = true
+
+	ics2 := &syntax.ICStream{
+		NumWindowGroups:      1,
+		NumWindows:           1,
+		MaxSFB:               4,
+		NumSWB:               4,
+		WindowSequence:       syntax.OnlyLongSequence,
+		GlobalGain:           100,
+		PredictorDataPresent: true,
+	}
+	ics2.WindowGroupLength[0] = 1
+	ics2.SWBOffset[0] = 0
+	ics2.SWBOffset[1] = 4
+	ics2.SWBOffset[2] = 8
+	ics2.SWBOffset[3] = 12
+	ics2.SWBOffset[4] = 16
+	ics2.SWBOffsetMax = 1024
+	ics2.SFBCB[0][0] = 1
+	ics2.ScaleFactors[0][0] = 100
+	ics2.Pred.PredictionUsed[0] = true
+	ics2.Pred.PredictionUsed[1] = true
+
+	predState1 := make([]PredState, 1024)
+	predState2 := make([]PredState, 1024)
+	ResetAllPredictors(predState1, 1024)
+	ResetAllPredictors(predState2, 1024)
+
+	ele := &syntax.Element{CommonWindow: false}
+
+	cfg := &ReconstructChannelPairConfig{
+		ICS1:        ics1,
+		ICS2:        ics2,
+		Element:     ele,
+		FrameLength: 1024,
+		ObjectType:  aac.ObjectTypeMain,
+		SRIndex:     4,
+		PNSState:    NewPNSState(),
+		PredState1:  predState1,
+		PredState2:  predState2,
+	}
+
+	quantData1 := make([]int16, 1024)
+	quantData2 := make([]int16, 1024)
+	for i := 0; i < 16; i++ {
+		quantData1[i] = int16(i + 1)
+		quantData2[i] = int16(i + 1)
+	}
+
+	specData1 := make([]float64, 1024)
+	specData2 := make([]float64, 1024)
+
+	err := ReconstructChannelPair(quantData1, quantData2, specData1, specData2, cfg)
+	if err != nil {
+		t.Fatalf("ReconstructChannelPair failed: %v", err)
+	}
+
+	// Predictor state should be updated for both channels
+	stateUpdated1 := false
+	stateUpdated2 := false
+	for i := 0; i < 16; i++ {
+		if predState1[i].R[0] != 0 || predState1[i].R[1] != 0 {
+			stateUpdated1 = true
+		}
+		if predState2[i].R[0] != 0 || predState2[i].R[1] != 0 {
+			stateUpdated2 = true
+		}
+	}
+	if !stateUpdated1 || !stateUpdated2 {
+		t.Error("predictor state should be updated for both channels")
+	}
+}
