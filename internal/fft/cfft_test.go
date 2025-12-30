@@ -128,3 +128,54 @@ func TestPassf4neg_Simple(t *testing.T) {
 		t.Errorf("ch[0].Im = %v, want 0.0", ch[0].Im)
 	}
 }
+
+func TestPassf2pos_Simple(t *testing.T) {
+	// Test radix-2 butterfly with ido > 1 case
+	// (ido=1 case is never used according to FAAD2 comments)
+
+	cc := []Complex{
+		{Re: 1, Im: 0},
+		{Re: 2, Im: 0},
+		{Re: 3, Im: 0},
+		{Re: 4, Im: 0},
+	}
+
+	ch := make([]Complex, 4)
+	wa := []Complex{{Re: 1, Im: 0}, {Re: 1, Im: 0}}
+
+	passf2pos(2, 1, cc, ch, wa)
+
+	// After radix-2: ch[0,1] = sum, ch[2,3] = diff (with twiddle)
+	// Sum: cc[0]+cc[2]=1+3=4, cc[1]+cc[3]=2+4=6
+	if ch[0].Re != 4.0 {
+		t.Errorf("ch[0].Re = %v, want 4.0", ch[0].Re)
+	}
+	if ch[1].Re != 6.0 {
+		t.Errorf("ch[1].Re = %v, want 6.0", ch[1].Re)
+	}
+}
+
+func TestPassf2neg_Simple(t *testing.T) {
+	// Test radix-2 butterfly for forward FFT (isign=-1)
+
+	cc := []Complex{
+		{Re: 1, Im: 0},
+		{Re: 2, Im: 0},
+		{Re: 3, Im: 0},
+		{Re: 4, Im: 0},
+	}
+
+	ch := make([]Complex, 4)
+	wa := []Complex{{Re: 1, Im: 0}, {Re: 1, Im: 0}}
+
+	passf2neg(2, 1, cc, ch, wa)
+
+	// After radix-2: ch[0,1] = sum, ch[2,3] = diff (with twiddle)
+	// Sum: cc[0]+cc[2]=1+3=4, cc[1]+cc[3]=2+4=6
+	if ch[0].Re != 4.0 {
+		t.Errorf("ch[0].Re = %v, want 4.0", ch[0].Re)
+	}
+	if ch[1].Re != 6.0 {
+		t.Errorf("ch[1].Re = %v, want 6.0", ch[1].Re)
+	}
+}

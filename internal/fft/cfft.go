@@ -22,8 +22,11 @@ func NewCFFT(n uint16) *CFFT {
 		Work: make([]Complex, n),
 		Tab:  make([]Complex, n),
 	}
-	_ = passf4pos // suppress unused warning during incremental development
-	_ = passf4neg // suppress unused warning during incremental development
+	// suppress unused warnings during incremental development
+	_ = passf2pos
+	_ = passf2neg
+	_ = passf4pos
+	_ = passf4neg
 
 	// Factorize n and compute twiddle factors
 	factorize(n, cfft.IFac[:])
@@ -126,6 +129,52 @@ func computeTwiddle(n uint16, wa []Complex, ifac []uint16) {
 			}
 		}
 		l1 = l2
+	}
+}
+
+// passf2pos performs a radix-2 butterfly for backward FFT (isign=+1).
+//
+// Ported from: passf2pos() in ~/dev/faad2/libfaad/cfft.c:70-123
+func passf2pos(ido, l1 uint16, cc, ch []Complex, wa []Complex) {
+	// Note: ido=1 case is never reached for supported AAC frame lengths
+	// according to FAAD2 comments, so we only implement ido > 1 case.
+
+	for k := uint16(0); k < l1; k++ {
+		ah := k * ido
+		ac := 2 * k * ido
+
+		for i := uint16(0); i < ido; i++ {
+			ch[ah+i].Re = cc[ac+i].Re + cc[ac+i+ido].Re
+			t2Re := cc[ac+i].Re - cc[ac+i+ido].Re
+			ch[ah+i].Im = cc[ac+i].Im + cc[ac+i+ido].Im
+			t2Im := cc[ac+i].Im - cc[ac+i+ido].Im
+
+			// Twiddle factor multiplication
+			ch[ah+i+l1*ido].Im, ch[ah+i+l1*ido].Re = ComplexMult(t2Im, t2Re, wa[i].Re, wa[i].Im)
+		}
+	}
+}
+
+// passf2neg performs a radix-2 butterfly for forward FFT (isign=-1).
+//
+// Ported from: passf2neg() in ~/dev/faad2/libfaad/cfft.c:125-178
+func passf2neg(ido, l1 uint16, cc, ch []Complex, wa []Complex) {
+	// Note: ido=1 case is never reached for supported AAC frame lengths
+	// according to FAAD2 comments, so we only implement ido > 1 case.
+
+	for k := uint16(0); k < l1; k++ {
+		ah := k * ido
+		ac := 2 * k * ido
+
+		for i := uint16(0); i < ido; i++ {
+			ch[ah+i].Re = cc[ac+i].Re + cc[ac+i+ido].Re
+			t2Re := cc[ac+i].Re - cc[ac+i+ido].Re
+			ch[ah+i].Im = cc[ac+i].Im + cc[ac+i+ido].Im
+			t2Im := cc[ac+i].Im - cc[ac+i+ido].Im
+
+			// Twiddle factor multiplication (note different order from passf2pos)
+			ch[ah+i+l1*ido].Re, ch[ah+i+l1*ido].Im = ComplexMult(t2Re, t2Im, wa[i].Re, wa[i].Im)
+		}
 	}
 }
 
