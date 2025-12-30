@@ -483,3 +483,85 @@ func TestReconstructSingleChannel_ShortBlocks(t *testing.T) {
 		t.Error("short block processing should produce non-zero values")
 	}
 }
+
+func TestReconstructChannelPair_BasicStereo(t *testing.T) {
+	// Setup minimal ICS for both channels
+	ics1 := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          4,
+		NumSWB:          4,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+		MSMaskPresent:   0, // No M/S
+	}
+	ics1.WindowGroupLength[0] = 1
+	ics1.SWBOffset[0] = 0
+	ics1.SWBOffset[1] = 4
+	ics1.SWBOffset[2] = 8
+	ics1.SWBOffset[3] = 12
+	ics1.SWBOffset[4] = 16
+	ics1.SWBOffsetMax = 1024
+	for g := 0; g < 8; g++ {
+		for sfb := 0; sfb < 51; sfb++ {
+			ics1.SFBCB[g][sfb] = 1
+			ics1.ScaleFactors[g][sfb] = 100
+		}
+	}
+
+	ics2 := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          4,
+		NumSWB:          4,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+	}
+	ics2.WindowGroupLength[0] = 1
+	ics2.SWBOffset[0] = 0
+	ics2.SWBOffset[1] = 4
+	ics2.SWBOffset[2] = 8
+	ics2.SWBOffset[3] = 12
+	ics2.SWBOffset[4] = 16
+	ics2.SWBOffsetMax = 1024
+	for g := 0; g < 8; g++ {
+		for sfb := 0; sfb < 51; sfb++ {
+			ics2.SFBCB[g][sfb] = 1
+			ics2.ScaleFactors[g][sfb] = 100
+		}
+	}
+
+	ele := &syntax.Element{
+		CommonWindow: false,
+	}
+
+	cfg := &ReconstructChannelPairConfig{
+		ICS1:        ics1,
+		ICS2:        ics2,
+		Element:     ele,
+		FrameLength: 1024,
+		ObjectType:  aac.ObjectTypeLC,
+		SRIndex:     4,
+		PNSState:    NewPNSState(),
+	}
+
+	quantData1 := make([]int16, 1024)
+	quantData2 := make([]int16, 1024)
+	quantData1[0] = 1
+	quantData1[1] = 2
+	quantData2[0] = 3
+	quantData2[1] = 4
+
+	specData1 := make([]float64, 1024)
+	specData2 := make([]float64, 1024)
+
+	err := ReconstructChannelPair(quantData1, quantData2, specData1, specData2, cfg)
+	if err != nil {
+		t.Fatalf("ReconstructChannelPair failed: %v", err)
+	}
+
+	// Verify non-zero output
+	if specData1[0] == 0 || specData2[0] == 0 {
+		t.Error("both channels should have non-zero output")
+	}
+}
