@@ -236,3 +236,72 @@ func TestReconstructSingleChannel_WithNoiseBand(t *testing.T) {
 		t.Error("noise band should have non-zero values")
 	}
 }
+
+func TestReconstructSingleChannel_WithTNS(t *testing.T) {
+	ics := &syntax.ICStream{
+		NumWindowGroups: 1,
+		NumWindows:      1,
+		MaxSFB:          4,
+		NumSWB:          4,
+		WindowSequence:  syntax.OnlyLongSequence,
+		GlobalGain:      100,
+		TNSDataPresent:  true,
+	}
+	ics.WindowGroupLength[0] = 1
+	ics.SWBOffset[0] = 0
+	ics.SWBOffset[1] = 8
+	ics.SWBOffset[2] = 16
+	ics.SWBOffset[3] = 24
+	ics.SWBOffset[4] = 32
+	ics.SWBOffsetMax = 1024
+	ics.SFBCB[0][0] = 1
+	ics.SFBCB[0][1] = 1
+	ics.SFBCB[0][2] = 1
+	ics.SFBCB[0][3] = 1
+	ics.ScaleFactors[0][0] = 100
+	ics.ScaleFactors[0][1] = 100
+	ics.ScaleFactors[0][2] = 100
+	ics.ScaleFactors[0][3] = 100
+
+	// Setup simple TNS data
+	ics.TNS.NFilt[0] = 1
+	ics.TNS.Length[0][0] = 4
+	ics.TNS.Order[0][0] = 1
+	ics.TNS.Direction[0][0] = 0
+	ics.TNS.CoefRes[0] = 1
+	ics.TNS.Coef[0][0][0] = 4
+
+	cfg := &ReconstructSingleChannelConfig{
+		ICS:         ics,
+		Element:     &syntax.Element{},
+		FrameLength: 1024,
+		ObjectType:  aac.ObjectTypeLC,
+		SRIndex:     4,
+		PNSState:    NewPNSState(),
+	}
+
+	quantData := make([]int16, 1024)
+	for i := 0; i < 32; i++ {
+		quantData[i] = 10
+	}
+
+	specData := make([]float64, 1024)
+
+	err := ReconstructSingleChannel(quantData, specData, cfg)
+	if err != nil {
+		t.Fatalf("ReconstructSingleChannel failed: %v", err)
+	}
+
+	// TNS should have modified the spectrum
+	// Just verify no error and non-zero output
+	hasValue := false
+	for i := 0; i < 32; i++ {
+		if specData[i] != 0 {
+			hasValue = true
+			break
+		}
+	}
+	if !hasValue {
+		t.Error("spectrum should have non-zero values after TNS")
+	}
+}
