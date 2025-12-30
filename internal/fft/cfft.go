@@ -22,6 +22,8 @@ func NewCFFT(n uint16) *CFFT {
 		Work: make([]Complex, n),
 		Tab:  make([]Complex, n),
 	}
+	_ = passf4pos // suppress unused warning during incremental development
+	_ = passf4neg // suppress unused warning during incremental development
 
 	// Factorize n and compute twiddle factors
 	factorize(n, cfft.IFac[:])
@@ -124,5 +126,129 @@ func computeTwiddle(n uint16, wa []Complex, ifac []uint16) {
 			}
 		}
 		l1 = l2
+	}
+}
+
+// passf4pos performs a radix-4 butterfly for backward FFT (isign=+1).
+//
+// Ported from: passf4pos() in ~/dev/faad2/libfaad/cfft.c:329-413
+func passf4pos(ido, l1 uint16, cc, ch []Complex, wa1, wa2, wa3 []Complex) {
+	if ido == 1 {
+		for k := uint16(0); k < l1; k++ {
+			ac := 4 * k
+			ah := k
+
+			t2Re := cc[ac].Re + cc[ac+2].Re
+			t1Re := cc[ac].Re - cc[ac+2].Re
+			t2Im := cc[ac].Im + cc[ac+2].Im
+			t1Im := cc[ac].Im - cc[ac+2].Im
+			t3Re := cc[ac+1].Re + cc[ac+3].Re
+			t4Im := cc[ac+1].Re - cc[ac+3].Re
+			t3Im := cc[ac+3].Im + cc[ac+1].Im
+			t4Re := cc[ac+3].Im - cc[ac+1].Im
+
+			ch[ah].Re = t2Re + t3Re
+			ch[ah+2*l1].Re = t2Re - t3Re
+			ch[ah].Im = t2Im + t3Im
+			ch[ah+2*l1].Im = t2Im - t3Im
+			ch[ah+l1].Re = t1Re + t4Re
+			ch[ah+3*l1].Re = t1Re - t4Re
+			ch[ah+l1].Im = t1Im + t4Im
+			ch[ah+3*l1].Im = t1Im - t4Im
+		}
+	} else {
+		for k := uint16(0); k < l1; k++ {
+			ac := 4 * k * ido
+			ah := k * ido
+
+			for i := uint16(0); i < ido; i++ {
+				t2Re := cc[ac+i].Re + cc[ac+i+2*ido].Re
+				t1Re := cc[ac+i].Re - cc[ac+i+2*ido].Re
+				t2Im := cc[ac+i].Im + cc[ac+i+2*ido].Im
+				t1Im := cc[ac+i].Im - cc[ac+i+2*ido].Im
+				t3Re := cc[ac+i+ido].Re + cc[ac+i+3*ido].Re
+				t4Im := cc[ac+i+ido].Re - cc[ac+i+3*ido].Re
+				t3Im := cc[ac+i+3*ido].Im + cc[ac+i+ido].Im
+				t4Re := cc[ac+i+3*ido].Im - cc[ac+i+ido].Im
+
+				c2Re := t1Re + t4Re
+				c4Re := t1Re - t4Re
+				c2Im := t1Im + t4Im
+				c4Im := t1Im - t4Im
+
+				ch[ah+i].Re = t2Re + t3Re
+				c3Re := t2Re - t3Re
+				ch[ah+i].Im = t2Im + t3Im
+				c3Im := t2Im - t3Im
+
+				// Twiddle factor multiplication
+				ch[ah+i+l1*ido].Im, ch[ah+i+l1*ido].Re = ComplexMult(c2Im, c2Re, wa1[i].Re, wa1[i].Im)
+				ch[ah+i+2*l1*ido].Im, ch[ah+i+2*l1*ido].Re = ComplexMult(c3Im, c3Re, wa2[i].Re, wa2[i].Im)
+				ch[ah+i+3*l1*ido].Im, ch[ah+i+3*l1*ido].Re = ComplexMult(c4Im, c4Re, wa3[i].Re, wa3[i].Im)
+			}
+		}
+	}
+}
+
+// passf4neg performs a radix-4 butterfly for forward FFT (isign=-1).
+//
+// Ported from: passf4neg() in ~/dev/faad2/libfaad/cfft.c:416-501
+func passf4neg(ido, l1 uint16, cc, ch []Complex, wa1, wa2, wa3 []Complex) {
+	if ido == 1 {
+		for k := uint16(0); k < l1; k++ {
+			ac := 4 * k
+			ah := k
+
+			t2Re := cc[ac].Re + cc[ac+2].Re
+			t1Re := cc[ac].Re - cc[ac+2].Re
+			t2Im := cc[ac].Im + cc[ac+2].Im
+			t1Im := cc[ac].Im - cc[ac+2].Im
+			t3Re := cc[ac+1].Re + cc[ac+3].Re
+			t4Im := cc[ac+1].Re - cc[ac+3].Re
+			t3Im := cc[ac+3].Im + cc[ac+1].Im
+			t4Re := cc[ac+3].Im - cc[ac+1].Im
+
+			ch[ah].Re = t2Re + t3Re
+			ch[ah+2*l1].Re = t2Re - t3Re
+			ch[ah].Im = t2Im + t3Im
+			ch[ah+2*l1].Im = t2Im - t3Im
+			// Note: signs differ from passf4pos
+			ch[ah+l1].Re = t1Re - t4Re
+			ch[ah+3*l1].Re = t1Re + t4Re
+			ch[ah+l1].Im = t1Im - t4Im
+			ch[ah+3*l1].Im = t1Im + t4Im
+		}
+	} else {
+		for k := uint16(0); k < l1; k++ {
+			ac := 4 * k * ido
+			ah := k * ido
+
+			for i := uint16(0); i < ido; i++ {
+				t2Re := cc[ac+i].Re + cc[ac+i+2*ido].Re
+				t1Re := cc[ac+i].Re - cc[ac+i+2*ido].Re
+				t2Im := cc[ac+i].Im + cc[ac+i+2*ido].Im
+				t1Im := cc[ac+i].Im - cc[ac+i+2*ido].Im
+				t3Re := cc[ac+i+ido].Re + cc[ac+i+3*ido].Re
+				t4Im := cc[ac+i+ido].Re - cc[ac+i+3*ido].Re
+				t3Im := cc[ac+i+3*ido].Im + cc[ac+i+ido].Im
+				t4Re := cc[ac+i+3*ido].Im - cc[ac+i+ido].Im
+
+				// Note: signs differ from passf4pos
+				c2Re := t1Re - t4Re
+				c4Re := t1Re + t4Re
+				c2Im := t1Im - t4Im
+				c4Im := t1Im + t4Im
+
+				ch[ah+i].Re = t2Re + t3Re
+				c3Re := t2Re - t3Re
+				ch[ah+i].Im = t2Im + t3Im
+				c3Im := t2Im - t3Im
+
+				// Twiddle factor multiplication (note different order from passf4pos)
+				ch[ah+i+l1*ido].Re, ch[ah+i+l1*ido].Im = ComplexMult(c2Re, c2Im, wa1[i].Re, wa1[i].Im)
+				ch[ah+i+2*l1*ido].Re, ch[ah+i+2*l1*ido].Im = ComplexMult(c3Re, c3Im, wa2[i].Re, wa2[i].Im)
+				ch[ah+i+3*l1*ido].Re, ch[ah+i+3*l1*ido].Im = ComplexMult(c4Re, c4Im, wa3[i].Re, wa3[i].Im)
+			}
+		}
 	}
 }
