@@ -27,6 +27,8 @@ func NewCFFT(n uint16) *CFFT {
 	_ = passf2neg
 	_ = passf4pos
 	_ = passf4neg
+	_ = passf3
+	_ = passf5
 
 	// Factorize n and compute twiddle factors
 	factorize(n, cfft.IFac[:])
@@ -239,6 +241,22 @@ func passf4pos(ido, l1 uint16, cc, ch []Complex, wa1, wa2, wa3 []Complex) {
 	}
 }
 
+// Trigonometric constants for radix-3 FFT.
+// Ported from: passf3() in ~/dev/faad2/libfaad/cfft.c:185-186
+const (
+	taur3 = float32(-0.5)
+	taui3 = float32(0.866025403784439) // sqrt(3)/2
+)
+
+// Trigonometric constants for radix-5 FFT.
+// Ported from: passf5() in ~/dev/faad2/libfaad/cfft.c:507-510
+const (
+	tr11 = float32(0.309016994374947)  // cos(2*pi/5)
+	ti11 = float32(0.951056516295154)  // sin(2*pi/5)
+	tr12 = float32(-0.809016994374947) // cos(4*pi/5)
+	ti12 = float32(0.587785252292473)  // sin(4*pi/5)
+)
+
 // passf4neg performs a radix-4 butterfly for forward FFT (isign=-1).
 //
 // Ported from: passf4neg() in ~/dev/faad2/libfaad/cfft.c:416-501
@@ -300,4 +318,150 @@ func passf4neg(ido, l1 uint16, cc, ch []Complex, wa1, wa2, wa3 []Complex) {
 			}
 		}
 	}
+}
+
+// passf3 performs a radix-3 butterfly for both forward and backward FFT.
+//
+// Ported from: passf3() in ~/dev/faad2/libfaad/cfft.c:181-326
+func passf3(ido, l1 uint16, cc, ch []Complex, wa1, wa2 []Complex, isign int8) {
+	// Note: ido=1 case is never reached for supported AAC frame lengths
+	// according to FAAD2 comments.
+
+	if isign == 1 {
+		// Backward FFT
+		for k := uint16(0); k < l1; k++ {
+			for i := uint16(0); i < ido; i++ {
+				ac := i + (3*k+1)*ido
+				ah := i + k*ido
+
+				t2Re := cc[ac].Re + cc[ac+ido].Re
+				c2Re := cc[ac-ido].Re + taur3*t2Re
+				t2Im := cc[ac].Im + cc[ac+ido].Im
+				c2Im := cc[ac-ido].Im + taur3*t2Im
+
+				ch[ah].Re = cc[ac-ido].Re + t2Re
+				ch[ah].Im = cc[ac-ido].Im + t2Im
+
+				c3Re := taui3 * (cc[ac].Re - cc[ac+ido].Re)
+				c3Im := taui3 * (cc[ac].Im - cc[ac+ido].Im)
+
+				d2Re := c2Re - c3Im
+				d3Im := c2Im - c3Re
+				d3Re := c2Re + c3Im
+				d2Im := c2Im + c3Re
+
+				ch[ah+l1*ido].Im, ch[ah+l1*ido].Re = ComplexMult(d2Im, d2Re, wa1[i].Re, wa1[i].Im)
+				ch[ah+2*l1*ido].Im, ch[ah+2*l1*ido].Re = ComplexMult(d3Im, d3Re, wa2[i].Re, wa2[i].Im)
+			}
+		}
+	} else {
+		// Forward FFT
+		for k := uint16(0); k < l1; k++ {
+			for i := uint16(0); i < ido; i++ {
+				ac := i + (3*k+1)*ido
+				ah := i + k*ido
+
+				t2Re := cc[ac].Re + cc[ac+ido].Re
+				c2Re := cc[ac-ido].Re + taur3*t2Re
+				t2Im := cc[ac].Im + cc[ac+ido].Im
+				c2Im := cc[ac-ido].Im + taur3*t2Im
+
+				ch[ah].Re = cc[ac-ido].Re + t2Re
+				ch[ah].Im = cc[ac-ido].Im + t2Im
+
+				c3Re := taui3 * (cc[ac].Re - cc[ac+ido].Re)
+				c3Im := taui3 * (cc[ac].Im - cc[ac+ido].Im)
+
+				d2Re := c2Re + c3Im
+				d3Im := c2Im + c3Re
+				d3Re := c2Re - c3Im
+				d2Im := c2Im - c3Re
+
+				ch[ah+l1*ido].Re, ch[ah+l1*ido].Im = ComplexMult(d2Re, d2Im, wa1[i].Re, wa1[i].Im)
+				ch[ah+2*l1*ido].Re, ch[ah+2*l1*ido].Im = ComplexMult(d3Re, d3Im, wa2[i].Re, wa2[i].Im)
+			}
+		}
+	}
+}
+
+// passf5 performs a radix-5 butterfly for both forward and backward FFT.
+//
+// Ported from: passf5() in ~/dev/faad2/libfaad/cfft.c:503-733
+func passf5(ido, l1 uint16, cc, ch []Complex, wa1, wa2, wa3, wa4 []Complex, isign int8) {
+	// Note: For AAC, radix-5 with ido=1 is the common case (5 is always the largest factor)
+
+	if ido == 1 {
+		if isign == 1 {
+			// Backward FFT
+			for k := uint16(0); k < l1; k++ {
+				ac := 5*k + 1
+				ah := k
+
+				t2Re := cc[ac].Re + cc[ac+3].Re
+				t2Im := cc[ac].Im + cc[ac+3].Im
+				t3Re := cc[ac+1].Re + cc[ac+2].Re
+				t3Im := cc[ac+1].Im + cc[ac+2].Im
+				t4Re := cc[ac+1].Re - cc[ac+2].Re
+				t4Im := cc[ac+1].Im - cc[ac+2].Im
+				t5Re := cc[ac].Re - cc[ac+3].Re
+				t5Im := cc[ac].Im - cc[ac+3].Im
+
+				ch[ah].Re = cc[ac-1].Re + t2Re + t3Re
+				ch[ah].Im = cc[ac-1].Im + t2Im + t3Im
+
+				c2Re := cc[ac-1].Re + tr11*t2Re + tr12*t3Re
+				c2Im := cc[ac-1].Im + tr11*t2Im + tr12*t3Im
+				c3Re := cc[ac-1].Re + tr12*t2Re + tr11*t3Re
+				c3Im := cc[ac-1].Im + tr12*t2Im + tr11*t3Im
+
+				c5Re, c4Re := ComplexMult(ti11, ti12, t5Re, t4Re)
+				c5Im, c4Im := ComplexMult(ti11, ti12, t5Im, t4Im)
+
+				ch[ah+l1].Re = c2Re - c5Im
+				ch[ah+l1].Im = c2Im + c5Re
+				ch[ah+2*l1].Re = c3Re - c4Im
+				ch[ah+2*l1].Im = c3Im + c4Re
+				ch[ah+3*l1].Re = c3Re + c4Im
+				ch[ah+3*l1].Im = c3Im - c4Re
+				ch[ah+4*l1].Re = c2Re + c5Im
+				ch[ah+4*l1].Im = c2Im - c5Re
+			}
+		} else {
+			// Forward FFT
+			for k := uint16(0); k < l1; k++ {
+				ac := 5*k + 1
+				ah := k
+
+				t2Re := cc[ac].Re + cc[ac+3].Re
+				t2Im := cc[ac].Im + cc[ac+3].Im
+				t3Re := cc[ac+1].Re + cc[ac+2].Re
+				t3Im := cc[ac+1].Im + cc[ac+2].Im
+				t4Re := cc[ac+1].Re - cc[ac+2].Re
+				t4Im := cc[ac+1].Im - cc[ac+2].Im
+				t5Re := cc[ac].Re - cc[ac+3].Re
+				t5Im := cc[ac].Im - cc[ac+3].Im
+
+				ch[ah].Re = cc[ac-1].Re + t2Re + t3Re
+				ch[ah].Im = cc[ac-1].Im + t2Im + t3Im
+
+				c2Re := cc[ac-1].Re + tr11*t2Re + tr12*t3Re
+				c2Im := cc[ac-1].Im + tr11*t2Im + tr12*t3Im
+				c3Re := cc[ac-1].Re + tr12*t2Re + tr11*t3Re
+				c3Im := cc[ac-1].Im + tr12*t2Im + tr11*t3Im
+
+				c4Re, c5Re := ComplexMult(ti12, ti11, t5Re, t4Re)
+				c4Im, c5Im := ComplexMult(ti12, ti11, t5Im, t4Im)
+
+				ch[ah+l1].Re = c2Re + c5Im
+				ch[ah+l1].Im = c2Im - c5Re
+				ch[ah+2*l1].Re = c3Re + c4Im
+				ch[ah+2*l1].Im = c3Im - c4Re
+				ch[ah+3*l1].Re = c3Re - c4Im
+				ch[ah+3*l1].Im = c3Im + c4Re
+				ch[ah+4*l1].Re = c2Re - c5Im
+				ch[ah+4*l1].Im = c2Im + c5Re
+			}
+		}
+	}
+	// Note: ido > 1 case exists in FAAD2 but is marked as unreachable for AAC
 }
