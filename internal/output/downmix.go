@@ -102,3 +102,27 @@ func (d *Downmixer) Downmix5_1ToStereo(input [][]float32, channelMap []uint8, sa
 
 	return left, right
 }
+
+// GetDownmixedSample returns a sample for the specified output channel,
+// applying 5.1 to stereo downmix if enabled.
+//
+// This provides compatibility with the get_sample pattern used in FAAD2.
+// For stereo output from 5.1 input:
+// - channel 0 returns the downmixed left sample
+// - channel 1 returns the downmixed right sample
+//
+// When downmix is disabled, returns the raw sample from channelMap[channel].
+//
+// Ported from: get_sample in ~/dev/faad2/libfaad/output.c:45-61
+func (d *Downmixer) GetDownmixedSample(input [][]float32, channel uint8, sampleIdx uint16, channelMap []uint8) float32 {
+	if !d.Enabled {
+		return input[channelMap[channel]][sampleIdx]
+	}
+
+	// For 5.1 to stereo, we only output channels 0 and 1
+	left, right := d.Downmix5_1ToStereo(input, channelMap, sampleIdx)
+	if channel == 0 {
+		return left
+	}
+	return right
+}

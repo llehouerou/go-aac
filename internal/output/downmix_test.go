@@ -174,3 +174,53 @@ func TestDownmix5_1ToStereo_Disabled(t *testing.T) {
 		t.Errorf("disabled right: got %v, want 600.0", right)
 	}
 }
+
+func TestGetDownmixedSample(t *testing.T) {
+	// 5.1 input
+	input := [][]float32{
+		{1000.0}, // Center
+		{500.0},  // Front Left
+		{600.0},  // Front Right
+		{200.0},  // Rear Left
+		{300.0},  // Rear Right
+		{100.0},  // LFE
+	}
+	channelMap := []uint8{0, 1, 2, 3, 4, 5}
+
+	dm := NewDownmixer()
+
+	// Request left channel (0) - should return downmixed left
+	leftSample := dm.GetDownmixedSample(input, 0, 0, channelMap)
+	expectedL := DownmixMul * (input[1][0] + input[0][0]*InvSqrt2 + input[3][0]*InvSqrt2)
+	if math.Abs(float64(leftSample-expectedL)) > 0.01 {
+		t.Errorf("left sample: got %v, want %v", leftSample, expectedL)
+	}
+
+	// Request right channel (1) - should return downmixed right
+	rightSample := dm.GetDownmixedSample(input, 1, 0, channelMap)
+	expectedR := DownmixMul * (input[2][0] + input[0][0]*InvSqrt2 + input[4][0]*InvSqrt2)
+	if math.Abs(float64(rightSample-expectedR)) > 0.01 {
+		t.Errorf("right sample: got %v, want %v", rightSample, expectedR)
+	}
+}
+
+func TestGetDownmixedSample_Passthrough(t *testing.T) {
+	input := [][]float32{
+		{100.0},
+		{200.0},
+	}
+	channelMap := []uint8{0, 1}
+
+	// When downmix is disabled, pass through unchanged
+	dm := &Downmixer{Enabled: false}
+
+	sample := dm.GetDownmixedSample(input, 0, 0, channelMap)
+	if sample != 100.0 {
+		t.Errorf("passthrough ch0: got %v, want 100.0", sample)
+	}
+
+	sample = dm.GetDownmixedSample(input, 1, 0, channelMap)
+	if sample != 200.0 {
+		t.Errorf("passthrough ch1: got %v, want 200.0", sample)
+	}
+}
