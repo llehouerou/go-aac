@@ -54,3 +54,32 @@ func TestDownmixConstants(t *testing.T) {
 		t.Errorf("InvSqrt2 != RSQRT2: %v vs %v", InvSqrt2, RSQRT2)
 	}
 }
+
+func TestNewDownmixer(t *testing.T) {
+	// Default downmixer
+	dm := NewDownmixer()
+	if !dm.Enabled {
+		t.Error("default downmixer should be enabled")
+	}
+	if dm.IncludeLFE {
+		t.Error("default downmixer should not include LFE")
+	}
+}
+
+func TestDownmixerConfig(t *testing.T) {
+	dm := &Downmixer{
+		Enabled:    true,
+		IncludeLFE: true,
+		LFEGain:    0.5,
+	}
+
+	if !dm.Enabled {
+		t.Error("Enabled should be true")
+	}
+	if !dm.IncludeLFE {
+		t.Error("IncludeLFE should be true")
+	}
+	if dm.LFEGain != 0.5 {
+		t.Errorf("LFEGain: got %v, want 0.5", dm.LFEGain)
+	}
+}
