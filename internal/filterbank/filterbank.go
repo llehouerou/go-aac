@@ -1,4 +1,19 @@
 // Package filterbank implements the AAC filter bank (IMDCT + windowing + overlap-add).
+//
+// The filter bank is responsible for converting frequency-domain spectral
+// coefficients (output from spectral reconstruction) into time-domain PCM samples.
+//
+// Key operations:
+//   - IMDCT (Inverse Modified Discrete Cosine Transform)
+//   - Windowing (sine or Kaiser-Bessel Derived windows)
+//   - Overlap-add (50% overlap between consecutive frames)
+//
+// Window sequences:
+//   - OnlyLongSequence: Standard long blocks (1024 samples)
+//   - LongStartSequence: Transition from long to short blocks
+//   - EightShortSequence: 8 short blocks (128 samples each)
+//   - LongStopSequence: Transition from short to long blocks
+//
 // Ported from: ~/dev/faad2/libfaad/filtbank.c
 package filterbank
 
