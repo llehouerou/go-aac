@@ -260,7 +260,27 @@ func (fb *FilterBank) FilterBankLTP(
 		copy(outMDCT, transfBuf[:nlong])
 
 	case syntax.LongStartSequence:
-		panic("LongStartSequence not yet implemented in FilterBankLTP")
+		// First half: window with long_prev (ascending)
+		// Second half: flat region + short window + zeros
+		// Ported from: filtbank.c:383-393
+		nflat_ls := (nlong - nshort) / 2
+		windowShort := GetShortWindow(int(windowShape))
+
+		for i := 0; i < nlong; i++ {
+			windowedBuf[i] = inData[i] * windowLongPrev[i]
+		}
+		for i := 0; i < nflat_ls; i++ {
+			windowedBuf[i+nlong] = inData[i+nlong]
+		}
+		for i := 0; i < nshort; i++ {
+			windowedBuf[i+nlong+nflat_ls] = inData[i+nlong+nflat_ls] * windowShort[nshort-1-i]
+		}
+		for i := 0; i < nflat_ls; i++ {
+			windowedBuf[i+nlong+nflat_ls+nshort] = 0
+		}
+		// Forward MDCT
+		fb.mdct2048.Forward(windowedBuf[:2*nlong], transfBuf[:2*nlong])
+		copy(outMDCT, transfBuf[:nlong])
 
 	case syntax.LongStopSequence:
 		panic("LongStopSequence not yet implemented in FilterBankLTP")
