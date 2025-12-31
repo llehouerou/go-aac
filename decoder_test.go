@@ -35,6 +35,33 @@ func TestDecoder_New(t *testing.T) {
 	}
 }
 
+func TestDecoder_SetConfiguration(t *testing.T) {
+	dec := NewDecoder()
+
+	cfg := Config{
+		DefObjectType: ObjectTypeHEAAC,
+		DefSampleRate: 48000,
+		OutputFormat:  OutputFormatFloat,
+		DownMatrix:    true,
+	}
+
+	dec.SetConfiguration(cfg)
+
+	got := dec.Config()
+	if got.DefObjectType != cfg.DefObjectType {
+		t.Errorf("DefObjectType: got %d, want %d", got.DefObjectType, cfg.DefObjectType)
+	}
+	if got.DefSampleRate != cfg.DefSampleRate {
+		t.Errorf("DefSampleRate: got %d, want %d", got.DefSampleRate, cfg.DefSampleRate)
+	}
+	if got.OutputFormat != cfg.OutputFormat {
+		t.Errorf("OutputFormat: got %d, want %d", got.OutputFormat, cfg.OutputFormat)
+	}
+	if got.DownMatrix != cfg.DownMatrix {
+		t.Errorf("DownMatrix: got %v, want %v", got.DownMatrix, cfg.DownMatrix)
+	}
+}
+
 func TestDecoder_Constants_MatchFAAD2(t *testing.T) {
 	// Verify constants match FAAD2's structs.h:43-44 definitions
 	tests := []struct {

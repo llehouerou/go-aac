@@ -106,3 +106,12 @@ func NewDecoder() *Decoder {
 func (d *Decoder) Config() Config {
 	return d.config
 }
+
+// SetConfiguration sets the decoder configuration.
+// Should be called before Init() for the settings to take effect.
+//
+// Ported from: NeAACDecSetConfiguration() in ~/dev/faad2/libfaad/decoder.c:264-299
+func (d *Decoder) SetConfiguration(cfg Config) {
+	d.config = cfg
+	d.downMatrix = cfg.DownMatrix
+}
