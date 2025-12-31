@@ -167,3 +167,42 @@ func TestToPCM16Bit_Mono(t *testing.T) {
 		}
 	}
 }
+
+func TestToPCM16Bit_Stereo(t *testing.T) {
+	// Two channel input
+	input := [][]float32{
+		{100.0, 200.0, 300.0},    // Left
+		{-100.0, -200.0, -300.0}, // Right
+	}
+	channelMap := []uint8{0, 1}
+
+	output := make([]int16, 6) // 3 samples * 2 channels
+	ToPCM16Bit(input, channelMap, 2, 3, false, false, output)
+
+	// Expected: L0, R0, L1, R1, L2, R2
+	expected := []int16{100, -100, 200, -200, 300, -300}
+	for i, want := range expected {
+		if output[i] != want {
+			t.Errorf("output[%d] = %d, want %d", i, output[i], want)
+		}
+	}
+}
+
+func TestToPCM16Bit_StereoUpMatrix(t *testing.T) {
+	// Single channel input, upmixed to stereo
+	input := [][]float32{
+		{100.0, 200.0, 300.0},
+	}
+	channelMap := []uint8{0}
+
+	output := make([]int16, 6) // 3 samples * 2 channels
+	ToPCM16Bit(input, channelMap, 2, 3, false, true, output)
+
+	// Expected: L0=R0, L1=R1, L2=R2 (mono duplicated to both channels)
+	expected := []int16{100, 100, 200, 200, 300, 300}
+	for i, want := range expected {
+		if output[i] != want {
+			t.Errorf("output[%d] = %d, want %d", i, output[i], want)
+		}
+	}
+}

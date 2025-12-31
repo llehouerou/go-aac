@@ -79,12 +79,31 @@ func clip32(sample float32) int32 {
 func ToPCM16Bit(input [][]float32, channelMap []uint8, channels uint8,
 	frameLen uint16, downMatrix, upMatrix bool, output []int16) {
 
-	switch channels {
-	case 1:
+	switch {
+	case channels == 1:
 		// Mono: direct copy with clipping
 		ch := channelMap[0]
 		for i := uint16(0); i < frameLen; i++ {
 			output[i] = clip16(input[ch][i])
+		}
+
+	case channels == 2 && !downMatrix:
+		if upMatrix {
+			// Mono to stereo upmix: duplicate to both channels
+			ch := channelMap[0]
+			for i := uint16(0); i < frameLen; i++ {
+				sample := clip16(input[ch][i])
+				output[i*2+0] = sample
+				output[i*2+1] = sample
+			}
+		} else {
+			// True stereo
+			chL := channelMap[0]
+			chR := channelMap[1]
+			for i := uint16(0); i < frameLen; i++ {
+				output[i*2+0] = clip16(input[chL][i])
+				output[i*2+1] = clip16(input[chR][i])
+			}
 		}
 
 	default:
