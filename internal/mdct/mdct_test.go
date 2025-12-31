@@ -89,3 +89,51 @@ func TestMDCTTables_MatchFAAD2(t *testing.T) {
 		}
 	})
 }
+
+func TestIMDCT_Linearity(t *testing.T) {
+	// Test that IMDCT(2*x) = 2*IMDCT(x) (linearity)
+	m := NewMDCT(256)
+
+	input1 := make([]float32, 128) // N/2 input
+	input2 := make([]float32, 128)
+	for i := range input1 {
+		input1[i] = float32(i) * 0.01
+		input2[i] = float32(i) * 0.02 // 2x
+	}
+
+	output1 := make([]float32, 256) // N output
+	output2 := make([]float32, 256)
+
+	m.IMDCT(input1, output1)
+	m.IMDCT(input2, output2)
+
+	for i := range output1 {
+		expected := output1[i] * 2
+		if math.Abs(float64(output2[i]-expected)) > 1e-4 {
+			t.Errorf("output2[%d] = %v, want %v (2*output1)", i, output2[i], expected)
+		}
+	}
+}
+
+func TestIMDCT_DCInput(t *testing.T) {
+	// DC input should produce a known pattern
+	m := NewMDCT(256)
+
+	input := make([]float32, 128)
+	input[0] = 1.0 // DC component only
+
+	output := make([]float32, 256)
+	m.IMDCT(input, output)
+
+	// Output should not be all zeros
+	hasNonZero := false
+	for _, v := range output {
+		if v != 0 {
+			hasNonZero = true
+			break
+		}
+	}
+	if !hasNonZero {
+		t.Error("IMDCT of DC produced all zeros")
+	}
+}
