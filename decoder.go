@@ -192,6 +192,19 @@ func (d *Decoder) ObjectType() ObjectType {
 	return ObjectType(d.objectType)
 }
 
+// PostSeekReset resets decoder state after a seek operation.
+// If frame >= 0, sets the frame counter to that value.
+// If frame == -1, the frame counter is left unchanged.
+//
+// Ported from: NeAACDecPostSeekReset() in ~/dev/faad2/libfaad/decoder.c:586-596
+func (d *Decoder) PostSeekReset(frame int64) {
+	d.postSeekResetFlag = true
+
+	if frame != -1 {
+		d.frame = uint32(frame)
+	}
+}
+
 // Close releases decoder resources.
 // The decoder should not be used after calling Close.
 //

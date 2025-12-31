@@ -252,3 +252,31 @@ func TestDecoder_StreamInfo(t *testing.T) {
 		t.Errorf("ObjectType: got %d, want %d", dec.ObjectType(), ObjectTypeLC)
 	}
 }
+
+func TestDecoder_PostSeekReset(t *testing.T) {
+	dec := NewDecoder()
+
+	// Set some state
+	dec.frame = 100
+	dec.postSeekResetFlag = false
+
+	// Reset after seek with specific frame
+	dec.PostSeekReset(50)
+
+	// Verify flag is set
+	if !dec.postSeekResetFlag {
+		t.Error("postSeekResetFlag not set after PostSeekReset")
+	}
+
+	// Frame should be updated
+	if dec.frame != 50 {
+		t.Errorf("frame not updated: got %d, want 50", dec.frame)
+	}
+
+	// Test with -1 (don't change frame)
+	dec.frame = 100
+	dec.PostSeekReset(-1)
+	if dec.frame != 100 {
+		t.Errorf("frame changed with -1: got %d, want 100", dec.frame)
+	}
+}
