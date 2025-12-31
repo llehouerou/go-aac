@@ -19,8 +19,14 @@ func TestNewMDCT_CreatesValidInstance(t *testing.T) {
 		if m.N != tt.n {
 			t.Errorf("N = %d, want %d", m.N, tt.n)
 		}
+		if m.N2 != tt.n/2 {
+			t.Errorf("N2 = %d, want %d", m.N2, tt.n/2)
+		}
 		if m.N4 != tt.n/4 {
 			t.Errorf("N4 = %d, want %d", m.N4, tt.n/4)
+		}
+		if m.N8 != tt.n/8 {
+			t.Errorf("N8 = %d, want %d", m.N8, tt.n/8)
 		}
 		if m.cfft == nil {
 			t.Error("cfft is nil")

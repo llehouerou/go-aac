@@ -35,6 +35,9 @@ func NewMDCT(n uint16) *MDCT {
 
 	// Get precomputed sincos table
 	m.sincos = getSinCosTable(n)
+	if m.sincos == nil {
+		panic("MDCT size not supported: no twiddle table available")
+	}
 
 	return m
 }
