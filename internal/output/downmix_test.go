@@ -289,3 +289,138 @@ func TestDownmixFrame_Disabled(t *testing.T) {
 		t.Errorf("disabled right: got %v, want [600.0, 1200.0]", right)
 	}
 }
+
+// TestDownmixer_MatchesPCMGetSample verifies that the new Downmixer produces
+// identical results to the existing getSample function in pcm.go.
+// This is a critical validation to ensure the port is correct.
+func TestDownmixer_MatchesPCMGetSample(t *testing.T) {
+	// 5.1 input with multiple samples
+	input := [][]float32{
+		{1000.0, 500.0, -200.0, 32767.0}, // Center
+		{500.0, 250.0, -100.0, 16000.0},  // Front Left
+		{600.0, 300.0, -120.0, 16500.0},  // Front Right
+		{200.0, 100.0, -50.0, 8000.0},    // Rear Left
+		{300.0, 150.0, -75.0, 8500.0},    // Rear Right
+		{100.0, 50.0, -25.0, 4000.0},     // LFE (ignored by both)
+	}
+	channelMap := []uint8{0, 1, 2, 3, 4, 5}
+
+	dm := NewDownmixer()
+
+	for i := uint16(0); i < 4; i++ {
+		// Get sample using old getSample function from pcm.go
+		oldLeft := getSample(input, 0, i, true, channelMap)
+		oldRight := getSample(input, 1, i, true, channelMap)
+
+		// Get sample using new Downmixer
+		newLeft := dm.GetDownmixedSample(input, 0, i, channelMap)
+		newRight := dm.GetDownmixedSample(input, 1, i, channelMap)
+
+		if math.Abs(float64(oldLeft-newLeft)) > 1e-6 {
+			t.Errorf("sample %d left mismatch: getSample=%v, Downmixer=%v", i, oldLeft, newLeft)
+		}
+		if math.Abs(float64(oldRight-newRight)) > 1e-6 {
+			t.Errorf("sample %d right mismatch: getSample=%v, Downmixer=%v", i, oldRight, newRight)
+		}
+	}
+}
+
+// TestDownmixer_MatchesPCMConstants verifies that the downmix constants match
+// between downmix.go and pcm.go.
+func TestDownmixer_MatchesPCMConstants(t *testing.T) {
+	if DownmixMul != DMMul {
+		t.Errorf("DownmixMul (%v) != DMMul (%v)", DownmixMul, DMMul)
+	}
+	if InvSqrt2 != RSQRT2 {
+		t.Errorf("InvSqrt2 (%v) != RSQRT2 (%v)", InvSqrt2, RSQRT2)
+	}
+}
+
+// TestDownmixer_MatchesPCMGetSample_Passthrough verifies that both implementations
+// behave identically when downmix is disabled (passthrough mode).
+func TestDownmixer_MatchesPCMGetSample_Passthrough(t *testing.T) {
+	// Stereo input
+	input := [][]float32{
+		{100.0, 200.0, 300.0},
+		{150.0, 250.0, 350.0},
+	}
+	channelMap := []uint8{0, 1}
+
+	dm := &Downmixer{Enabled: false}
+
+	for i := uint16(0); i < 3; i++ {
+		// Get sample using old getSample function (downMatrix=false)
+		oldCh0 := getSample(input, 0, i, false, channelMap)
+		oldCh1 := getSample(input, 1, i, false, channelMap)
+
+		// Get sample using new Downmixer (disabled)
+		newCh0 := dm.GetDownmixedSample(input, 0, i, channelMap)
+		newCh1 := dm.GetDownmixedSample(input, 1, i, channelMap)
+
+		if oldCh0 != newCh0 {
+			t.Errorf("sample %d ch0 passthrough mismatch: getSample=%v, Downmixer=%v", i, oldCh0, newCh0)
+		}
+		if oldCh1 != newCh1 {
+			t.Errorf("sample %d ch1 passthrough mismatch: getSample=%v, Downmixer=%v", i, oldCh1, newCh1)
+		}
+	}
+}
+
+// TestDownmixer_EdgeCases verifies both implementations handle edge cases identically.
+func TestDownmixer_EdgeCases(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input [][]float32
+	}{
+		{
+			name: "all zeros",
+			input: [][]float32{
+				{0.0}, {0.0}, {0.0}, {0.0}, {0.0}, {0.0},
+			},
+		},
+		{
+			name: "max positive values",
+			input: [][]float32{
+				{32767.0}, {32767.0}, {32767.0}, {32767.0}, {32767.0}, {32767.0},
+			},
+		},
+		{
+			name: "max negative values",
+			input: [][]float32{
+				{-32768.0}, {-32768.0}, {-32768.0}, {-32768.0}, {-32768.0}, {-32768.0},
+			},
+		},
+		{
+			name: "center only",
+			input: [][]float32{
+				{10000.0}, {0.0}, {0.0}, {0.0}, {0.0}, {0.0},
+			},
+		},
+		{
+			name: "surrounds only",
+			input: [][]float32{
+				{0.0}, {0.0}, {0.0}, {5000.0}, {5000.0}, {0.0},
+			},
+		},
+	}
+
+	channelMap := []uint8{0, 1, 2, 3, 4, 5}
+	dm := NewDownmixer()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			oldLeft := getSample(tc.input, 0, 0, true, channelMap)
+			oldRight := getSample(tc.input, 1, 0, true, channelMap)
+
+			newLeft := dm.GetDownmixedSample(tc.input, 0, 0, channelMap)
+			newRight := dm.GetDownmixedSample(tc.input, 1, 0, channelMap)
+
+			if math.Abs(float64(oldLeft-newLeft)) > 1e-6 {
+				t.Errorf("left mismatch: getSample=%v, Downmixer=%v", oldLeft, newLeft)
+			}
+			if math.Abs(float64(oldRight-newRight)) > 1e-6 {
+				t.Errorf("right mismatch: getSample=%v, Downmixer=%v", oldRight, newRight)
+			}
+		})
+	}
+}
