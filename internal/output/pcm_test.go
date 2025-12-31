@@ -253,3 +253,30 @@ func TestGetSample_Downmix5_1ToStereo(t *testing.T) {
 		t.Errorf("getSample(ch1, downmix) = %v, want %v", gotR, expectedR)
 	}
 }
+
+func TestToPCM16Bit_Downmix(t *testing.T) {
+	// 5.1 input: C, L, R, Ls, Rs (5 channels)
+	input := [][]float32{
+		{1000.0, 2000.0}, // Center
+		{500.0, 1000.0},  // Left
+		{600.0, 1200.0},  // Right
+		{200.0, 400.0},   // Left Surround
+		{300.0, 600.0},   // Right Surround
+	}
+	channelMap := []uint8{0, 1, 2, 3, 4}
+
+	output := make([]int16, 4) // 2 samples * 2 channels
+	ToPCM16Bit(input, channelMap, 2, 2, true, false, output)
+
+	// Calculate expected left output for sample 0
+	expectedL0 := DMMul * (input[1][0] + input[0][0]*RSQRT2 + input[3][0]*RSQRT2)
+	// Calculate expected right output for sample 0
+	expectedR0 := DMMul * (input[2][0] + input[0][0]*RSQRT2 + input[4][0]*RSQRT2)
+
+	if output[0] != clip16(expectedL0) {
+		t.Errorf("output[0] = %d, want %d", output[0], clip16(expectedL0))
+	}
+	if output[1] != clip16(expectedR0) {
+		t.Errorf("output[1] = %d, want %d", output[1], clip16(expectedR0))
+	}
+}

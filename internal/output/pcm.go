@@ -108,7 +108,7 @@ func ToPCM16Bit(input [][]float32, channelMap []uint8, channels uint8,
 	frameLen uint16, downMatrix, upMatrix bool, output []int16) {
 
 	switch {
-	case channels == 1:
+	case channels == 1 && !downMatrix:
 		// Mono: direct copy with clipping
 		ch := channelMap[0]
 		for i := uint16(0); i < frameLen; i++ {
@@ -135,10 +135,10 @@ func ToPCM16Bit(input [][]float32, channelMap []uint8, channels uint8,
 		}
 
 	default:
-		// Generic multichannel (will be expanded later)
-		for i := uint16(0); i < frameLen; i++ {
-			for ch := uint8(0); ch < channels; ch++ {
-				inp := input[channelMap[ch]][i]
+		// Generic multichannel with optional downmix
+		for ch := uint8(0); ch < channels; ch++ {
+			for i := uint16(0); i < frameLen; i++ {
+				inp := getSample(input, ch, i, downMatrix, channelMap)
 				output[int(i)*int(channels)+int(ch)] = clip16(inp)
 			}
 		}
