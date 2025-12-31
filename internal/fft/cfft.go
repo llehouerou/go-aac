@@ -22,13 +22,6 @@ func NewCFFT(n uint16) *CFFT {
 		Work: make([]Complex, n),
 		Tab:  make([]Complex, n),
 	}
-	// suppress unused warnings during incremental development
-	_ = passf2pos
-	_ = passf2neg
-	_ = passf4pos
-	_ = passf4neg
-	_ = passf3
-	_ = passf5
 
 	// Factorize n and compute twiddle factors
 	factorize(n, cfft.IFac[:])
@@ -464,4 +457,160 @@ func passf5(ido, l1 uint16, cc, ch []Complex, wa1, wa2, wa3, wa4 []Complex, isig
 		}
 	}
 	// Note: ido > 1 case exists in FAAD2 but is marked as unreachable for AAC
+}
+
+// Forward performs the forward FFT (frequency analysis).
+//
+// Ported from: cfftf() in ~/dev/faad2/libfaad/cfft.c:896-899
+func (cfft *CFFT) Forward(c []Complex) {
+	cfft.cfftf1neg(c, -1)
+}
+
+// Backward performs the backward FFT (synthesis).
+//
+// Ported from: cfftb() in ~/dev/faad2/libfaad/cfft.c:901-904
+func (cfft *CFFT) Backward(c []Complex) {
+	cfft.cfftf1pos(c, +1)
+}
+
+// cfftf1pos is the main FFT computation for backward transform.
+//
+// Ported from: cfftf1pos() in ~/dev/faad2/libfaad/cfft.c:740-816
+func (cfft *CFFT) cfftf1pos(c []Complex, isign int8) {
+	n := cfft.N
+	ch := cfft.Work
+	ifac := cfft.IFac[:]
+	wa := cfft.Tab
+
+	nf := ifac[1]
+	na := uint16(0)
+	l1 := uint16(1)
+	iw := uint16(0)
+
+	for k1 := uint16(2); k1 <= nf+1; k1++ {
+		ip := ifac[k1]
+		l2 := ip * l1
+		ido := n / l2
+
+		switch ip {
+		case 4:
+			ix2 := iw + ido
+			ix3 := ix2 + ido
+			if na == 0 {
+				passf4pos(ido, l1, c, ch, wa[iw:], wa[ix2:], wa[ix3:])
+			} else {
+				passf4pos(ido, l1, ch, c, wa[iw:], wa[ix2:], wa[ix3:])
+			}
+			na = 1 - na
+
+		case 2:
+			if na == 0 {
+				passf2pos(ido, l1, c, ch, wa[iw:])
+			} else {
+				passf2pos(ido, l1, ch, c, wa[iw:])
+			}
+			na = 1 - na
+
+		case 3:
+			ix2 := iw + ido
+			if na == 0 {
+				passf3(ido, l1, c, ch, wa[iw:], wa[ix2:], isign)
+			} else {
+				passf3(ido, l1, ch, c, wa[iw:], wa[ix2:], isign)
+			}
+			na = 1 - na
+
+		case 5:
+			ix2 := iw + ido
+			ix3 := ix2 + ido
+			ix4 := ix3 + ido
+			if na == 0 {
+				passf5(ido, l1, c, ch, wa[iw:], wa[ix2:], wa[ix3:], wa[ix4:], isign)
+			} else {
+				passf5(ido, l1, ch, c, wa[iw:], wa[ix2:], wa[ix3:], wa[ix4:], isign)
+			}
+			na = 1 - na
+		}
+
+		l1 = l2
+		iw += (ip - 1) * ido
+	}
+
+	if na == 0 {
+		return
+	}
+
+	// Copy result back to c
+	copy(c, ch[:n])
+}
+
+// cfftf1neg is the main FFT computation for forward transform.
+//
+// Ported from: cfftf1neg() in ~/dev/faad2/libfaad/cfft.c:818-894
+func (cfft *CFFT) cfftf1neg(c []Complex, isign int8) {
+	n := cfft.N
+	ch := cfft.Work
+	ifac := cfft.IFac[:]
+	wa := cfft.Tab
+
+	nf := ifac[1]
+	na := uint16(0)
+	l1 := uint16(1)
+	iw := uint16(0)
+
+	for k1 := uint16(2); k1 <= nf+1; k1++ {
+		ip := ifac[k1]
+		l2 := ip * l1
+		ido := n / l2
+
+		switch ip {
+		case 4:
+			ix2 := iw + ido
+			ix3 := ix2 + ido
+			if na == 0 {
+				passf4neg(ido, l1, c, ch, wa[iw:], wa[ix2:], wa[ix3:])
+			} else {
+				passf4neg(ido, l1, ch, c, wa[iw:], wa[ix2:], wa[ix3:])
+			}
+			na = 1 - na
+
+		case 2:
+			if na == 0 {
+				passf2neg(ido, l1, c, ch, wa[iw:])
+			} else {
+				passf2neg(ido, l1, ch, c, wa[iw:])
+			}
+			na = 1 - na
+
+		case 3:
+			ix2 := iw + ido
+			if na == 0 {
+				passf3(ido, l1, c, ch, wa[iw:], wa[ix2:], isign)
+			} else {
+				passf3(ido, l1, ch, c, wa[iw:], wa[ix2:], isign)
+			}
+			na = 1 - na
+
+		case 5:
+			ix2 := iw + ido
+			ix3 := ix2 + ido
+			ix4 := ix3 + ido
+			if na == 0 {
+				passf5(ido, l1, c, ch, wa[iw:], wa[ix2:], wa[ix3:], wa[ix4:], isign)
+			} else {
+				passf5(ido, l1, ch, c, wa[iw:], wa[ix2:], wa[ix3:], wa[ix4:], isign)
+			}
+			na = 1 - na
+		}
+
+		l1 = l2
+		iw += (ip - 1) * ido
+	}
+
+	if na == 0 {
+		return
+	}
+
+	// Copy result back to c
+	copy(c, ch[:n])
 }

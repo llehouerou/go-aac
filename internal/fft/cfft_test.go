@@ -2,6 +2,7 @@ package fft
 
 import (
 	"fmt"
+	"math"
 	"testing"
 )
 
@@ -315,5 +316,70 @@ func TestPassf5_ForwardFFT_ido1(t *testing.T) {
 	}
 	if ch[0].Im != 0.0 {
 		t.Errorf("ch[0].Im = %v, want 0.0", ch[0].Im)
+	}
+}
+
+func TestCFFT_RoundTrip(t *testing.T) {
+	// Test that forward FFT followed by backward FFT recovers the original signal
+	// (with appropriate scaling).
+
+	tests := []uint16{64, 512}
+
+	for _, n := range tests {
+		t.Run(fmt.Sprintf("n=%d", n), func(t *testing.T) {
+			cfft := NewCFFT(n)
+
+			// Create test signal
+			original := make([]Complex, n)
+			for i := range original {
+				original[i].Re = float32(i % 10)
+				original[i].Im = float32((i + 5) % 7)
+			}
+
+			// Copy for transformation
+			c := make([]Complex, n)
+			copy(c, original)
+
+			// Forward FFT
+			cfft.Forward(c)
+
+			// Backward FFT
+			cfft.Backward(c)
+
+			// Verify recovery (FAAD2's FFT doesn't scale, so result = n * original)
+			scale := float32(n)
+			for i := range c {
+				wantRe := original[i].Re * scale
+				wantIm := original[i].Im * scale
+				if math.Abs(float64(c[i].Re-wantRe)) > 0.1 {
+					t.Errorf("c[%d].Re = %v, want %v", i, c[i].Re, wantRe)
+				}
+				if math.Abs(float64(c[i].Im-wantIm)) > 0.1 {
+					t.Errorf("c[%d].Im = %v, want %v", i, c[i].Im, wantIm)
+				}
+			}
+		})
+	}
+}
+
+func TestCFFT_KnownValues(t *testing.T) {
+	// Test FFT against known values
+	// 64-point DFT of [1, 0, 0, ...] = [1, 1, 1, ..., 1]
+
+	cfft := NewCFFT(64)
+
+	c := make([]Complex, 64)
+	c[0].Re = 1.0 // Impulse
+
+	cfft.Backward(c)
+
+	// All outputs should be 1.0 (within tolerance)
+	for i := range c {
+		if math.Abs(float64(c[i].Re-1.0)) > 1e-5 {
+			t.Errorf("c[%d].Re = %v, want 1.0", i, c[i].Re)
+		}
+		if math.Abs(float64(c[i].Im)) > 1e-5 {
+			t.Errorf("c[%d].Im = %v, want 0.0", i, c[i].Im)
+		}
 	}
 }
