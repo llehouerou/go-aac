@@ -206,3 +206,69 @@ func (fb *FilterBank) IFilterBank(
 		panic("window sequence not implemented")
 	}
 }
+
+// FilterBankLTP performs the forward filter bank operation for Long Term Prediction.
+// This converts time-domain samples to frequency-domain MDCT coefficients.
+//
+// Parameters:
+//   - windowSequence: One of OnlyLongSequence, LongStartSequence, LongStopSequence
+//     (EIGHT_SHORT_SEQUENCE is NOT supported for LTP)
+//   - windowShape: Current frame's window shape (SineWindow or KBDWindow)
+//   - windowShapePrev: Previous frame's window shape
+//   - inData: Input time samples (2*frameLen samples)
+//   - outMDCT: Output MDCT coefficients (frameLen samples)
+//
+// Ported from: filter_bank_ltp() in ~/dev/faad2/libfaad/filtbank.c:337-408
+func (fb *FilterBank) FilterBankLTP(
+	windowSequence syntax.WindowSequence,
+	windowShape uint8,
+	windowShapePrev uint8,
+	inData []float32,
+	outMDCT []float32,
+) {
+	nlong := len(outMDCT)
+	nshort := nlong / 8
+	_ = nshort // Will be used for other window sequences
+
+	windowedBuf := fb.windowedBuf
+
+	// Clear windowed buffer
+	for i := range windowedBuf[:2*nlong] {
+		windowedBuf[i] = 0
+	}
+
+	// Get windows for current and previous frame
+	windowLong := GetLongWindow(int(windowShape))
+	windowLongPrev := GetLongWindow(int(windowShapePrev))
+
+	// Use transfBuf as intermediate for forward MDCT output (needs 2*nlong)
+	// Only the first nlong coefficients are used in AAC
+	transfBuf := fb.transfBuf
+
+	switch windowSequence {
+	case syntax.OnlyLongSequence:
+		// Window first half with previous window (ascending)
+		// Window second half with current window (descending)
+		// Ported from: filtbank.c:374-380
+		for i := nlong - 1; i >= 0; i-- {
+			windowedBuf[i] = inData[i] * windowLongPrev[i]
+			windowedBuf[i+nlong] = inData[i+nlong] * windowLong[nlong-1-i]
+		}
+		// Forward MDCT (outputs 2*nlong samples to transfBuf)
+		fb.mdct2048.Forward(windowedBuf[:2*nlong], transfBuf[:2*nlong])
+		// Copy only the first nlong coefficients to output
+		copy(outMDCT, transfBuf[:nlong])
+
+	case syntax.LongStartSequence:
+		panic("LongStartSequence not yet implemented in FilterBankLTP")
+
+	case syntax.LongStopSequence:
+		panic("LongStopSequence not yet implemented in FilterBankLTP")
+
+	case syntax.EightShortSequence:
+		panic("EightShortSequence is not supported for LTP")
+
+	default:
+		panic("unknown window sequence in FilterBankLTP")
+	}
+}
