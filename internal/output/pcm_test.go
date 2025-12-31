@@ -280,3 +280,107 @@ func TestToPCM16Bit_Downmix(t *testing.T) {
 		t.Errorf("output[1] = %d, want %d", output[1], clip16(expectedR0))
 	}
 }
+
+func TestToPCM24Bit_Mono(t *testing.T) {
+	// Input in 16-bit range, will be scaled to 24-bit
+	input := [][]float32{
+		{0.0, 100.0, -100.0, 32767.0, -32768.0},
+	}
+	channelMap := []uint8{0}
+
+	output := make([]int32, 5)
+	ToPCM24Bit(input, channelMap, 1, 5, false, false, output)
+
+	// Values are scaled by 256
+	expected := []int32{0, 25600, -25600, 8388352, -8388608}
+	for i, want := range expected {
+		if output[i] != want {
+			t.Errorf("output[%d] = %d, want %d", i, output[i], want)
+		}
+	}
+}
+
+func TestToPCM24Bit_Stereo(t *testing.T) {
+	input := [][]float32{
+		{100.0, 200.0},
+		{-100.0, -200.0},
+	}
+	channelMap := []uint8{0, 1}
+
+	output := make([]int32, 4)
+	ToPCM24Bit(input, channelMap, 2, 2, false, false, output)
+
+	// L0, R0, L1, R1 scaled by 256
+	expected := []int32{25600, -25600, 51200, -51200}
+	for i, want := range expected {
+		if output[i] != want {
+			t.Errorf("output[%d] = %d, want %d", i, output[i], want)
+		}
+	}
+}
+
+func TestToPCM24Bit_StereoUpMatrix(t *testing.T) {
+	// Single channel input, upmixed to stereo
+	input := [][]float32{
+		{100.0, 200.0, 300.0},
+	}
+	channelMap := []uint8{0}
+
+	output := make([]int32, 6) // 3 samples * 2 channels
+	ToPCM24Bit(input, channelMap, 2, 3, false, true, output)
+
+	// Expected: L0=R0, L1=R1, L2=R2 (mono duplicated to both channels, scaled by 256)
+	expected := []int32{25600, 25600, 51200, 51200, 76800, 76800}
+	for i, want := range expected {
+		if output[i] != want {
+			t.Errorf("output[%d] = %d, want %d", i, output[i], want)
+		}
+	}
+}
+
+func TestToPCM24Bit_Clipping(t *testing.T) {
+	// Test clipping at 24-bit boundaries
+	input := [][]float32{
+		{40000.0, -40000.0}, // Will exceed 24-bit range when scaled by 256
+	}
+	channelMap := []uint8{0}
+
+	output := make([]int32, 2)
+	ToPCM24Bit(input, channelMap, 1, 2, false, false, output)
+
+	// 40000 * 256 = 10,240,000 > 8388607, so clips to max
+	// -40000 * 256 = -10,240,000 < -8388608, so clips to min
+	expected := []int32{8388607, -8388608}
+	for i, want := range expected {
+		if output[i] != want {
+			t.Errorf("output[%d] = %d, want %d", i, output[i], want)
+		}
+	}
+}
+
+func TestToPCM24Bit_Downmix(t *testing.T) {
+	// 5.1 input: C, L, R, Ls, Rs (5 channels)
+	input := [][]float32{
+		{1000.0, 2000.0}, // Center
+		{500.0, 1000.0},  // Left
+		{600.0, 1200.0},  // Right
+		{200.0, 400.0},   // Left Surround
+		{300.0, 600.0},   // Right Surround
+	}
+	channelMap := []uint8{0, 1, 2, 3, 4}
+
+	output := make([]int32, 4) // 2 samples * 2 channels
+	ToPCM24Bit(input, channelMap, 2, 2, true, false, output)
+
+	// Calculate expected left output for sample 0, scaled by 256
+	expectedL0 := DMMul * (input[1][0] + input[0][0]*RSQRT2 + input[3][0]*RSQRT2) * 256
+	// Calculate expected right output for sample 0, scaled by 256
+	expectedR0 := DMMul * (input[2][0] + input[0][0]*RSQRT2 + input[4][0]*RSQRT2) * 256
+
+	if output[0] != clip24(expectedL0) {
+		t.Errorf("output[0] = %d, want %d", output[0], clip24(expectedL0))
+	}
+	if output[1] != clip24(expectedR0) {
+		t.Errorf("output[1] = %d, want %d", output[1], clip24(expectedR0))
+	}
+}
