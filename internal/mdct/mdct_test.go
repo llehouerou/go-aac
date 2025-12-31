@@ -51,57 +51,41 @@ func TestMDCTTables_MatchFAAD2(t *testing.T) {
 		}
 	})
 
-	// Test first entries match the formula: sqrt(2/N) * exp(j * 2*PI * (k + 1/8) / N)
-	// For k=0: angle = 2*PI * 0.125 / N
-	t.Run("FirstEntry_N2048", func(t *testing.T) {
+	// Validate all entries match formula: sqrt(2/N) * exp(j * 2*PI * (k + 1/8) / N)
+	// Tolerance of 1e-7 accounts for float32 precision (~7 decimal digits)
+	const tolerance = 1e-7
+
+	t.Run("AllEntries_N2048", func(t *testing.T) {
 		n := 2048.0
 		scale := math.Sqrt(2.0 / n)
-		angle := 2.0 * math.Pi * 0.125 / n
-		expectedRe := float32(scale * math.Cos(angle))
-		expectedIm := float32(scale * math.Sin(angle))
+		for k := 0; k < len(mdctTab2048); k++ {
+			angle := 2.0 * math.Pi * (float64(k) + 0.125) / n
+			expectedRe := float32(scale * math.Cos(angle))
+			expectedIm := float32(scale * math.Sin(angle))
 
-		// Verify scale is approximately 0.03125
-		expectedScale := float32(math.Sqrt(2.0 / 2048.0))
-		if math.Abs(float64(expectedScale)-0.03125) > 0.0001 {
-			t.Errorf("scale for N=2048: got %v, want ~0.03125", expectedScale)
-		}
-
-		gotRe := mdctTab2048[0].Re
-		gotIm := mdctTab2048[0].Im
-
-		// Allow small tolerance for floating-point comparison
-		const tolerance = 1e-7
-		if math.Abs(float64(gotRe-expectedRe)) > tolerance {
-			t.Errorf("mdctTab2048[0].Re = %v, want %v", gotRe, expectedRe)
-		}
-		if math.Abs(float64(gotIm-expectedIm)) > tolerance {
-			t.Errorf("mdctTab2048[0].Im = %v, want %v", gotIm, expectedIm)
+			if math.Abs(float64(mdctTab2048[k].Re-expectedRe)) > tolerance {
+				t.Errorf("mdctTab2048[%d].Re = %v, want %v", k, mdctTab2048[k].Re, expectedRe)
+			}
+			if math.Abs(float64(mdctTab2048[k].Im-expectedIm)) > tolerance {
+				t.Errorf("mdctTab2048[%d].Im = %v, want %v", k, mdctTab2048[k].Im, expectedIm)
+			}
 		}
 	})
 
-	t.Run("FirstEntry_N256", func(t *testing.T) {
+	t.Run("AllEntries_N256", func(t *testing.T) {
 		n := 256.0
 		scale := math.Sqrt(2.0 / n)
-		angle := 2.0 * math.Pi * 0.125 / n
-		expectedRe := float32(scale * math.Cos(angle))
-		expectedIm := float32(scale * math.Sin(angle))
+		for k := 0; k < len(mdctTab256); k++ {
+			angle := 2.0 * math.Pi * (float64(k) + 0.125) / n
+			expectedRe := float32(scale * math.Cos(angle))
+			expectedIm := float32(scale * math.Sin(angle))
 
-		// Verify scale is approximately 0.0884
-		expectedScale := float32(math.Sqrt(2.0 / 256.0))
-		if math.Abs(float64(expectedScale)-0.0884) > 0.001 {
-			t.Errorf("scale for N=256: got %v, want ~0.0884", expectedScale)
-		}
-
-		gotRe := mdctTab256[0].Re
-		gotIm := mdctTab256[0].Im
-
-		// Allow small tolerance for floating-point comparison
-		const tolerance = 1e-7
-		if math.Abs(float64(gotRe-expectedRe)) > tolerance {
-			t.Errorf("mdctTab256[0].Re = %v, want %v", gotRe, expectedRe)
-		}
-		if math.Abs(float64(gotIm-expectedIm)) > tolerance {
-			t.Errorf("mdctTab256[0].Im = %v, want %v", gotIm, expectedIm)
+			if math.Abs(float64(mdctTab256[k].Re-expectedRe)) > tolerance {
+				t.Errorf("mdctTab256[%d].Re = %v, want %v", k, mdctTab256[k].Re, expectedRe)
+			}
+			if math.Abs(float64(mdctTab256[k].Im-expectedIm)) > tolerance {
+				t.Errorf("mdctTab256[%d].Im = %v, want %v", k, mdctTab256[k].Im, expectedIm)
+			}
 		}
 	})
 }
