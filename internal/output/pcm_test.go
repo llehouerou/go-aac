@@ -29,3 +29,43 @@ func TestPCMConstants(t *testing.T) {
 		t.Errorf("RSQRT2: got %v, want %v", RSQRT2, expectedRSQRT2)
 	}
 }
+
+func TestClip16(t *testing.T) {
+	tests := []struct {
+		name  string
+		input float32
+		want  int16
+	}{
+		// Normal range
+		{"zero", 0.0, 0},
+		{"positive", 100.5, 100},   // Rounds to nearest even (100 is even)
+		{"negative", -100.5, -100}, // Rounds to nearest even (-100 is even)
+
+		// Edge cases at boundaries
+		{"max_boundary", 32767.0, 32767},
+		{"min_boundary", -32768.0, -32768},
+
+		// Clipping cases
+		{"clip_positive", 40000.0, 32767},
+		{"clip_negative", -40000.0, -32768},
+		{"clip_max_float", 1e10, 32767},
+		{"clip_min_float", -1e10, -32768},
+
+		// Rounding behavior (matches lrintf: round to nearest, ties to even)
+		{"round_up", 0.6, 1},
+		{"round_down", 0.4, 0},
+		{"round_half_even_up", 1.5, 2},   // 1.5 -> 2 (nearest even)
+		{"round_half_even_down", 2.5, 2}, // 2.5 -> 2 (nearest even)
+		{"round_neg_up", -0.4, 0},
+		{"round_neg_down", -0.6, -1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := clip16(tt.input)
+			if got != tt.want {
+				t.Errorf("clip16(%v) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}

@@ -2,6 +2,8 @@
 // Ported from: ~/dev/faad2/libfaad/output.c
 package output
 
+import "math"
+
 // PCM conversion constants.
 // Ported from: ~/dev/faad2/libfaad/output.c:39-42
 
@@ -15,3 +17,19 @@ const DMMul = float32(0.3203772410170407)
 
 // RSQRT2 is 1/sqrt(2), used for downmix calculations.
 const RSQRT2 = float32(0.7071067811865475244)
+
+// clip16 clips and rounds a float32 to int16 range.
+// Matches FAAD2's CLIP macro + lrintf behavior.
+//
+// Ported from: ~/dev/faad2/libfaad/output.c:64-85
+func clip16(sample float32) int16 {
+	// Clipping
+	if sample >= 32767.0 {
+		return 32767
+	}
+	if sample <= -32768.0 {
+		return -32768
+	}
+	// Round to nearest (lrintf behavior)
+	return int16(math.RoundToEven(float64(sample)))
+}
