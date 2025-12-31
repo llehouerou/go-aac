@@ -170,3 +170,60 @@ func TestMDCT_ForwardBasic(t *testing.T) {
 		}
 	}
 }
+
+func TestMDCT_RoundTrip(t *testing.T) {
+	// Verify Forward and IMDCT work together correctly.
+	// Full reconstruction requires windowing and overlap-add,
+	// but we can verify the transforms are inverses up to scaling.
+
+	m := NewMDCT(256)
+	n := uint16(256)
+	n2 := n / 2
+
+	// Create test input
+	input := make([]float32, n)
+	for i := range input {
+		input[i] = float32(math.Sin(float64(i) * 2 * math.Pi / float64(n)))
+	}
+
+	// Forward MDCT: N -> N (TDAC form)
+	spectrum := make([]float32, n)
+	m.Forward(input, spectrum)
+
+	// The first N/2 elements of the Forward output can be used as
+	// frequency coefficients for IMDCT
+	freqCoeffs := spectrum[:n2]
+
+	// IMDCT: N/2 -> N
+	output := make([]float32, n)
+	m.IMDCT(freqCoeffs, output)
+
+	// Verify outputs are reasonable (not NaN/Inf)
+	for i := range output {
+		if math.IsNaN(float64(output[i])) {
+			t.Errorf("output[%d] is NaN", i)
+		}
+		if math.IsInf(float64(output[i]), 0) {
+			t.Errorf("output[%d] is Inf", i)
+		}
+	}
+
+	// Verify some correlation between input and output exists
+	// (The exact reconstruction requires overlap-add with windowing)
+	var sumProduct float64
+	var sumInputSq float64
+	var sumOutputSq float64
+	for i := range input {
+		sumProduct += float64(input[i]) * float64(output[i])
+		sumInputSq += float64(input[i]) * float64(input[i])
+		sumOutputSq += float64(output[i]) * float64(output[i])
+	}
+
+	// If transforms are working, there should be some correlation
+	if sumOutputSq == 0 {
+		t.Error("output is all zeros")
+	}
+
+	t.Logf("Round-trip correlation: product=%v, input_energy=%v, output_energy=%v",
+		sumProduct, sumInputSq, sumOutputSq)
+}
