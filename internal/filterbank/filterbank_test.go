@@ -90,3 +90,42 @@ func TestIFilterBank_LongStartSequence(t *testing.T) {
 		}
 	}
 }
+
+func TestIFilterBank_LongStopSequence(t *testing.T) {
+	fb := NewFilterBank(1024)
+
+	freqIn := make([]float32, 1024)
+	for i := range freqIn {
+		freqIn[i] = float32(i % 100)
+	}
+
+	timeOut := make([]float32, 1024)
+	overlap := make([]float32, 1024)
+
+	// Initialize overlap as if coming from short blocks
+	nshort := 1024 / 8              // 128
+	nflat_ls := (1024 - nshort) / 2 // 448
+	for i := 0; i < nflat_ls; i++ {
+		overlap[i] = 0 // zeros before short window region
+	}
+	for i := nflat_ls; i < nflat_ls+nshort; i++ {
+		overlap[i] = float32(i) // some values in short window region
+	}
+	for i := nflat_ls + nshort; i < 1024; i++ {
+		overlap[i] = float32(i) // values in flat region after short
+	}
+
+	fb.IFilterBank(syntax.LongStopSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+
+	// After LONG_STOP, the overlap should be full long window style
+	allZero := true
+	for _, v := range overlap {
+		if v != 0 {
+			allZero = false
+			break
+		}
+	}
+	if allZero {
+		t.Error("overlap should have non-zero values")
+	}
+}

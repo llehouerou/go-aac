@@ -69,9 +69,6 @@ func (fb *FilterBank) IFilterBank(
 	windowShort := GetShortWindow(int(windowShape))
 	windowShortPrev := GetShortWindow(int(windowShapePrev))
 
-	// Suppress unused variable warnings for cases we haven't implemented yet
-	_ = windowShortPrev
-
 	switch windowSequence {
 	case syntax.OnlyLongSequence:
 		// Perform IMDCT
@@ -108,6 +105,27 @@ func (fb *FilterBank) IFilterBank(
 		}
 		for i := 0; i < nflat_ls; i++ {
 			overlap[nflat_ls+nshort+i] = 0
+		}
+
+	case syntax.LongStopSequence:
+		// Perform IMDCT
+		fb.mdct2048.IMDCT(freqIn, transfBuf)
+
+		// Add second half of previous frame to windowed output of current frame
+		// Construct first half window using padding with 1's and 0's
+		for i := 0; i < nflat_ls; i++ {
+			timeOut[i] = overlap[i]
+		}
+		for i := 0; i < nshort; i++ {
+			timeOut[nflat_ls+i] = overlap[nflat_ls+i] + transfBuf[nflat_ls+i]*windowShortPrev[i]
+		}
+		for i := 0; i < nflat_ls; i++ {
+			timeOut[nflat_ls+nshort+i] = overlap[nflat_ls+nshort+i] + transfBuf[nflat_ls+nshort+i]
+		}
+
+		// Window the second half and save as overlap for next frame
+		for i := 0; i < nlong; i++ {
+			overlap[i] = transfBuf[nlong+i] * windowLong[nlong-1-i]
 		}
 
 	default:
