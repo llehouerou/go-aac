@@ -194,13 +194,35 @@ func TestDecoder_Close(t *testing.T) {
 	_ = dec.allocateChannelBuffers(2)
 	dec.allocateLTPBuffers(2)
 
+	// Simulate component references
+	dec.fb = struct{}{}  // Non-nil value
+	dec.drc = struct{}{} // Non-nil value
+	dec.pce = struct{}{} // Non-nil value
+
 	// Close should not panic
 	dec.Close()
 
-	// Verify buffers are nil'd (helps GC)
+	// Verify per-channel buffers are nil'd (helps GC)
 	for ch := 0; ch < 2; ch++ {
 		if dec.timeOut[ch] != nil {
 			t.Errorf("timeOut[%d] not cleared after Close", ch)
 		}
+		if dec.fbIntermed[ch] != nil {
+			t.Errorf("fbIntermed[%d] not cleared after Close", ch)
+		}
+		if dec.ltPredStat[ch] != nil {
+			t.Errorf("ltPredStat[%d] not cleared after Close", ch)
+		}
+	}
+
+	// Verify component references are nil'd
+	if dec.fb != nil {
+		t.Error("fb not cleared after Close")
+	}
+	if dec.drc != nil {
+		t.Error("drc not cleared after Close")
+	}
+	if dec.pce != nil {
+		t.Error("pce not cleared after Close")
 	}
 }
