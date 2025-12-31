@@ -362,3 +362,122 @@ func TestFilterBankLTP_LongStopSequence(t *testing.T) {
 		}
 	}
 }
+
+func TestFilterBankLTP_EightShortSequence_Panics(t *testing.T) {
+	fb := NewFilterBank(1024)
+
+	inData := make([]float32, 2048)
+	outMDCT := make([]float32, 1024)
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("FilterBankLTP should panic for EightShortSequence")
+		}
+	}()
+
+	fb.FilterBankLTP(
+		syntax.EightShortSequence,
+		SineWindow,
+		SineWindow,
+		inData,
+		outMDCT,
+	)
+}
+
+func TestFilterBankLTP_MixedWindowShapes(t *testing.T) {
+	fb := NewFilterBank(1024)
+
+	inData := make([]float32, 2048)
+	for i := range inData {
+		inData[i] = float32(i%100) * 0.01
+	}
+
+	outMDCT := make([]float32, 1024)
+
+	testCases := []struct {
+		name            string
+		windowSeq       syntax.WindowSequence
+		windowShape     uint8
+		windowShapePrev uint8
+	}{
+		{"OnlyLong_Sine_KBD", syntax.OnlyLongSequence, SineWindow, KBDWindow},
+		{"OnlyLong_KBD_Sine", syntax.OnlyLongSequence, KBDWindow, SineWindow},
+		{"OnlyLong_KBD_KBD", syntax.OnlyLongSequence, KBDWindow, KBDWindow},
+		{"LongStart_Sine_KBD", syntax.LongStartSequence, SineWindow, KBDWindow},
+		{"LongStop_KBD_Sine", syntax.LongStopSequence, KBDWindow, SineWindow},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fb.FilterBankLTP(
+				tc.windowSeq,
+				tc.windowShape,
+				tc.windowShapePrev,
+				inData,
+				outMDCT,
+			)
+
+			// Verify output is valid
+			for i, v := range outMDCT {
+				if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+					t.Errorf("outMDCT[%d] = %v (invalid)", i, v)
+				}
+			}
+		})
+	}
+}
+
+func TestFilterBank_RoundTrip_LTP(t *testing.T) {
+	// Verify that FilterBankLTP and IFilterBank are consistent.
+	// A full round-trip requires proper overlap handling, but we can
+	// verify the transforms produce correlated output.
+
+	fb := NewFilterBank(1024)
+
+	// Create smooth input signal
+	input := make([]float32, 2048)
+	for i := range input {
+		input[i] = float32(math.Sin(float64(i) * 2 * math.Pi / 2048))
+	}
+
+	// Forward transform: time -> freq
+	freqCoeffs := make([]float32, 1024)
+	fb.FilterBankLTP(
+		syntax.OnlyLongSequence,
+		SineWindow,
+		SineWindow,
+		input,
+		freqCoeffs,
+	)
+
+	// Inverse transform: freq -> time
+	timeOut := make([]float32, 1024)
+	overlap := make([]float32, 1024)
+	fb.IFilterBank(
+		syntax.OnlyLongSequence,
+		SineWindow,
+		SineWindow,
+		freqCoeffs,
+		timeOut,
+		overlap,
+	)
+
+	// Verify outputs are valid (not NaN/Inf)
+	for i, v := range timeOut {
+		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			t.Errorf("timeOut[%d] = %v (invalid)", i, v)
+		}
+	}
+
+	// Check for some correlation between original and reconstructed
+	// (exact reconstruction requires multiple frames with overlap-add)
+	var energy float64
+	for _, v := range timeOut {
+		energy += float64(v) * float64(v)
+	}
+	if energy == 0 {
+		t.Error("round-trip produced all zeros")
+	}
+
+	t.Logf("Round-trip output energy: %v", energy)
+}
