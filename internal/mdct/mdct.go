@@ -3,6 +3,8 @@ package mdct
 import "github.com/llehouerou/go-aac/internal/fft"
 
 // MDCT holds state for Modified Discrete Cosine Transform operations.
+// An MDCT instance is NOT safe for concurrent use from multiple goroutines.
+// Each goroutine should use its own MDCT instance.
 //
 // Ported from: mdct_info struct in ~/dev/faad2/libfaad/structs.h:57-65
 type MDCT struct {
