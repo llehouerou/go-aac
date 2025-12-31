@@ -256,3 +256,59 @@ func ToPCM32Bit(input [][]float32, channelMap []uint8, channels uint8,
 		}
 	}
 }
+
+// ToPCMFloat converts float32 samples to normalized float32 PCM.
+//
+// Input values are scaled by FloatScale (1/32768) to normalize to [-1.0, 1.0].
+// No clipping is applied.
+//
+// Parameters:
+//   - input: Per-channel float32 samples (input[channel][sample])
+//   - channelMap: Maps output channels to input channels
+//   - channels: Number of output channels
+//   - frameLen: Number of samples per channel
+//   - downMatrix: Enable 5.1 to stereo downmixing
+//   - upMatrix: Enable mono to stereo upmixing
+//   - output: Destination slice for normalized float32 samples
+//
+// Ported from: to_PCM_float in ~/dev/faad2/libfaad/output.c:294-344
+func ToPCMFloat(input [][]float32, channelMap []uint8, channels uint8,
+	frameLen uint16, downMatrix, upMatrix bool, output []float32) {
+
+	switch {
+	case channels == 1 && !downMatrix:
+		// Mono: direct copy with scaling
+		ch := channelMap[0]
+		for i := uint16(0); i < frameLen; i++ {
+			output[i] = input[ch][i] * FloatScale
+		}
+
+	case channels == 2 && !downMatrix:
+		if upMatrix {
+			// Mono to stereo upmix: duplicate to both channels
+			ch := channelMap[0]
+			for i := uint16(0); i < frameLen; i++ {
+				sample := input[ch][i] * FloatScale
+				output[i*2+0] = sample
+				output[i*2+1] = sample
+			}
+		} else {
+			// True stereo
+			chL := channelMap[0]
+			chR := channelMap[1]
+			for i := uint16(0); i < frameLen; i++ {
+				output[i*2+0] = input[chL][i] * FloatScale
+				output[i*2+1] = input[chR][i] * FloatScale
+			}
+		}
+
+	default:
+		// Generic multichannel with optional downmix
+		for ch := uint8(0); ch < channels; ch++ {
+			for i := uint16(0); i < frameLen; i++ {
+				inp := getSample(input, ch, i, downMatrix, channelMap)
+				output[int(i)*int(channels)+int(ch)] = inp * FloatScale
+			}
+		}
+	}
+}

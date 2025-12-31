@@ -488,3 +488,105 @@ func TestToPCM32Bit_Downmix(t *testing.T) {
 		t.Errorf("output[1] = %d, want %d", output[1], clip32(expectedR0))
 	}
 }
+
+func TestToPCMFloat_Mono(t *testing.T) {
+	// Input in 16-bit range, will be normalized to [-1.0, 1.0]
+	input := [][]float32{
+		{0.0, 32768.0, -32768.0},
+	}
+	channelMap := []uint8{0}
+
+	output := make([]float32, 3)
+	ToPCMFloat(input, channelMap, 1, 3, false, false, output)
+
+	// Values scaled by FloatScale = 1/32768
+	expected := []float32{0.0, 1.0, -1.0}
+	for i, want := range expected {
+		if math.Abs(float64(output[i]-want)) > 1e-6 {
+			t.Errorf("output[%d] = %v, want %v", i, output[i], want)
+		}
+	}
+}
+
+func TestToPCMFloat_Stereo(t *testing.T) {
+	input := [][]float32{
+		{16384.0, 32768.0}, // 0.5, 1.0 after scaling
+		{-16384.0, -32768.0},
+	}
+	channelMap := []uint8{0, 1}
+
+	output := make([]float32, 4)
+	ToPCMFloat(input, channelMap, 2, 2, false, false, output)
+
+	expected := []float32{0.5, -0.5, 1.0, -1.0}
+	for i, want := range expected {
+		if math.Abs(float64(output[i]-want)) > 1e-6 {
+			t.Errorf("output[%d] = %v, want %v", i, output[i], want)
+		}
+	}
+}
+
+func TestToPCMFloat_StereoUpMatrix(t *testing.T) {
+	// Single channel input, upmixed to stereo
+	input := [][]float32{
+		{16384.0, 32768.0}, // 0.5, 1.0 after scaling
+	}
+	channelMap := []uint8{0}
+
+	output := make([]float32, 4) // 2 samples * 2 channels
+	ToPCMFloat(input, channelMap, 2, 2, false, true, output)
+
+	// Expected: L0=R0, L1=R1 (mono duplicated to both channels)
+	expected := []float32{0.5, 0.5, 1.0, 1.0}
+	for i, want := range expected {
+		if math.Abs(float64(output[i]-want)) > 1e-6 {
+			t.Errorf("output[%d] = %v, want %v", i, output[i], want)
+		}
+	}
+}
+
+func TestToPCMFloat_Downmix(t *testing.T) {
+	// 5.1 input: C, L, R, Ls, Rs (5 channels)
+	input := [][]float32{
+		{1000.0, 2000.0}, // Center
+		{500.0, 1000.0},  // Left
+		{600.0, 1200.0},  // Right
+		{200.0, 400.0},   // Left Surround
+		{300.0, 600.0},   // Right Surround
+	}
+	channelMap := []uint8{0, 1, 2, 3, 4}
+
+	output := make([]float32, 4) // 2 samples * 2 channels
+	ToPCMFloat(input, channelMap, 2, 2, true, false, output)
+
+	// Calculate expected left output for sample 0, scaled by FloatScale
+	expectedL0 := DMMul * (input[1][0] + input[0][0]*RSQRT2 + input[3][0]*RSQRT2) * FloatScale
+	// Calculate expected right output for sample 0, scaled by FloatScale
+	expectedR0 := DMMul * (input[2][0] + input[0][0]*RSQRT2 + input[4][0]*RSQRT2) * FloatScale
+
+	if math.Abs(float64(output[0]-expectedL0)) > 1e-6 {
+		t.Errorf("output[0] = %v, want %v", output[0], expectedL0)
+	}
+	if math.Abs(float64(output[1]-expectedR0)) > 1e-6 {
+		t.Errorf("output[1] = %v, want %v", output[1], expectedR0)
+	}
+}
+
+func TestToPCMFloat_NoClipping(t *testing.T) {
+	// Float output doesn't clip - values can exceed [-1.0, 1.0]
+	input := [][]float32{
+		{65536.0, -65536.0}, // 2.0, -2.0 after scaling (exceeds normalized range)
+	}
+	channelMap := []uint8{0}
+
+	output := make([]float32, 2)
+	ToPCMFloat(input, channelMap, 1, 2, false, false, output)
+
+	// Values should be 2.0 and -2.0, not clipped
+	expected := []float32{2.0, -2.0}
+	for i, want := range expected {
+		if math.Abs(float64(output[i]-want)) > 1e-6 {
+			t.Errorf("output[%d] = %v, want %v", i, output[i], want)
+		}
+	}
+}
