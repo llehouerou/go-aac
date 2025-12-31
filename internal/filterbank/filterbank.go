@@ -128,8 +128,64 @@ func (fb *FilterBank) IFilterBank(
 			overlap[i] = transfBuf[nlong+i] * windowLong[nlong-1-i]
 		}
 
+	case syntax.EightShortSequence:
+		trans := nshort / 2
+
+		// Perform IMDCT for each of the 8 short blocks
+		// Ported from: ~/dev/faad2/libfaad/filtbank.c:266-273
+		for blk := 0; blk < 8; blk++ {
+			fb.mdct256.IMDCT(freqIn[blk*nshort:], transfBuf[2*nshort*blk:])
+		}
+
+		// Add second half of previous frame to windowed output of current frame
+		// Ported from: ~/dev/faad2/libfaad/filtbank.c:276-286
+		for i := 0; i < nflat_ls; i++ {
+			timeOut[i] = overlap[i]
+		}
+		for i := 0; i < nshort; i++ {
+			timeOut[nflat_ls+i] = overlap[nflat_ls+i] +
+				transfBuf[nshort*0+i]*windowShortPrev[i]
+			timeOut[nflat_ls+1*nshort+i] = overlap[nflat_ls+nshort*1+i] +
+				transfBuf[nshort*1+i]*windowShort[nshort-1-i] +
+				transfBuf[nshort*2+i]*windowShort[i]
+			timeOut[nflat_ls+2*nshort+i] = overlap[nflat_ls+nshort*2+i] +
+				transfBuf[nshort*3+i]*windowShort[nshort-1-i] +
+				transfBuf[nshort*4+i]*windowShort[i]
+			timeOut[nflat_ls+3*nshort+i] = overlap[nflat_ls+nshort*3+i] +
+				transfBuf[nshort*5+i]*windowShort[nshort-1-i] +
+				transfBuf[nshort*6+i]*windowShort[i]
+			if i < trans {
+				timeOut[nflat_ls+4*nshort+i] = overlap[nflat_ls+nshort*4+i] +
+					transfBuf[nshort*7+i]*windowShort[nshort-1-i] +
+					transfBuf[nshort*8+i]*windowShort[i]
+			}
+		}
+
+		// Window the second half and save as overlap for next frame
+		// Ported from: ~/dev/faad2/libfaad/filtbank.c:289-299
+		for i := 0; i < nshort; i++ {
+			if i >= trans {
+				overlap[nflat_ls+4*nshort+i-nlong] =
+					transfBuf[nshort*7+i]*windowShort[nshort-1-i] +
+						transfBuf[nshort*8+i]*windowShort[i]
+			}
+			overlap[nflat_ls+5*nshort+i-nlong] =
+				transfBuf[nshort*9+i]*windowShort[nshort-1-i] +
+					transfBuf[nshort*10+i]*windowShort[i]
+			overlap[nflat_ls+6*nshort+i-nlong] =
+				transfBuf[nshort*11+i]*windowShort[nshort-1-i] +
+					transfBuf[nshort*12+i]*windowShort[i]
+			overlap[nflat_ls+7*nshort+i-nlong] =
+				transfBuf[nshort*13+i]*windowShort[nshort-1-i] +
+					transfBuf[nshort*14+i]*windowShort[i]
+			overlap[nflat_ls+8*nshort+i-nlong] =
+				transfBuf[nshort*15+i] * windowShort[nshort-1-i]
+		}
+		for i := 0; i < nflat_ls; i++ {
+			overlap[nflat_ls+nshort+i] = 0
+		}
+
 	default:
-		// TODO: implement other window sequences
 		panic("window sequence not implemented")
 	}
 }

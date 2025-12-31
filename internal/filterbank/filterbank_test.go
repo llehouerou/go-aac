@@ -129,3 +129,40 @@ func TestIFilterBank_LongStopSequence(t *testing.T) {
 		t.Error("overlap should have non-zero values")
 	}
 }
+
+func TestIFilterBank_EightShortSequence(t *testing.T) {
+	fb := NewFilterBank(1024)
+
+	// Input is 1024 coefficients, but treated as 8x128 short blocks
+	freqIn := make([]float32, 1024)
+	for i := range freqIn {
+		freqIn[i] = float32(i % 50)
+	}
+
+	timeOut := make([]float32, 1024)
+	overlap := make([]float32, 1024)
+
+	// Set up overlap as if coming from LONG_START
+	nshort := 1024 / 8              // 128
+	nflat_ls := (1024 - nshort) / 2 // 448
+	for i := 0; i < nflat_ls; i++ {
+		overlap[i] = float32(i)
+	}
+	for i := nflat_ls; i < 1024; i++ {
+		overlap[i] = float32(i % 100)
+	}
+
+	fb.IFilterBank(syntax.EightShortSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+
+	// timeOut should have valid data
+	allZero := true
+	for _, v := range timeOut {
+		if v != 0 {
+			allZero = false
+			break
+		}
+	}
+	if allZero {
+		t.Error("timeOut should have non-zero values after EIGHT_SHORT_SEQUENCE")
+	}
+}
