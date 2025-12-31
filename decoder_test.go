@@ -186,3 +186,21 @@ func TestDecoder_allocateLTPBuffers(t *testing.T) {
 		}
 	}
 }
+
+func TestDecoder_Close(t *testing.T) {
+	dec := NewDecoder()
+
+	// Allocate some buffers
+	_ = dec.allocateChannelBuffers(2)
+	dec.allocateLTPBuffers(2)
+
+	// Close should not panic
+	dec.Close()
+
+	// Verify buffers are nil'd (helps GC)
+	for ch := 0; ch < 2; ch++ {
+		if dec.timeOut[ch] != nil {
+			t.Errorf("timeOut[%d] not cleared after Close", ch)
+		}
+	}
+}

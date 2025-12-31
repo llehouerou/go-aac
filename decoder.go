@@ -155,3 +155,20 @@ func (d *Decoder) allocateLTPBuffers(numChannels uint8) {
 		}
 	}
 }
+
+// Close releases decoder resources.
+// The decoder should not be used after calling Close.
+//
+// Ported from: NeAACDecClose() in ~/dev/faad2/libfaad/decoder.c:785-856
+func (d *Decoder) Close() {
+	// Clear per-channel buffers to help GC
+	for ch := 0; ch < maxChannels; ch++ {
+		d.timeOut[ch] = nil
+		d.fbIntermed[ch] = nil
+		d.ltPredStat[ch] = nil
+	}
+
+	// Clear component references
+	d.fb = nil
+	d.drc = nil
+}
