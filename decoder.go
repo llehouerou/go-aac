@@ -80,22 +80,24 @@ type Decoder struct {
 
 // NewDecoder creates a new AAC decoder with default settings.
 //
-// Ported from: NeAACDecOpen() in ~/dev/faad2/libfaad/decoder.c:188-240
+// Ported from: NeAACDecOpen() in ~/dev/faad2/libfaad/decoder.c:123-182
 func NewDecoder() *Decoder {
 	d := &Decoder{
 		config: Config{
-			DefObjectType: ObjectTypeLC,
+			DefObjectType: ObjectTypeMain, // FAAD2 default is MAIN (decoder.c:135)
 			DefSampleRate: 44100,
 			OutputFormat:  OutputFormat16Bit,
 		},
 		frameLength: 1024,
-		rngState1:   0x12345678,
-		rngState2:   0x87654321,
+		// RNG seeds from FAAD2 decoder.c:151-153
+		// "Same as (1, 1) after 1024 iterations; otherwise first values does not look random at all"
+		rngState1: 0x2bb431ea,
+		rngState2: 0x206155b7,
 	}
 
-	// Note: FilterBank and DRC are initialized lazily during first decode
-	// to avoid import cycles. The filterbank and output packages import
-	// syntax, which imports aac.
+	// TODO(Step 7.2): Initialize FilterBank and DRC here once import cycle is resolved.
+	// Currently deferred to Init() method due to: aac -> filterbank -> syntax -> aac cycle.
+	// The syntax/asc.go file imports the root aac package for AudioSpecificConfig.
 
 	return d
 }
