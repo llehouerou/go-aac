@@ -31,7 +31,8 @@ type FilterBank struct {
 	mdct2048 *mdct.MDCT // For long blocks (2048-sample IMDCT)
 
 	// Internal buffers (reused to avoid allocations)
-	transfBuf []float32 // 2*frameLength for IMDCT output
+	transfBuf   []float32 // 2*frameLength for IMDCT output
+	windowedBuf []float32 // 2*frameLength for LTP windowed input
 }
 
 // NewFilterBank creates and initializes a FilterBank for the given frame length.
@@ -42,9 +43,10 @@ func NewFilterBank(frameLen uint16) *FilterBank {
 	nshort := frameLen / 8 // 128 for standard AAC
 
 	fb := &FilterBank{
-		mdct256:   mdct.NewMDCT(2 * nshort),   // 256 for short blocks
-		mdct2048:  mdct.NewMDCT(2 * frameLen), // 2048 for long blocks
-		transfBuf: make([]float32, 2*frameLen),
+		mdct256:     mdct.NewMDCT(2 * nshort),   // 256 for short blocks
+		mdct2048:    mdct.NewMDCT(2 * frameLen), // 2048 for long blocks
+		transfBuf:   make([]float32, 2*frameLen),
+		windowedBuf: make([]float32, 2*frameLen),
 	}
 
 	return fb
