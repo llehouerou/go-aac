@@ -137,3 +137,36 @@ func TestIMDCT_DCInput(t *testing.T) {
 		t.Error("IMDCT of DC produced all zeros")
 	}
 }
+
+func TestMDCT_ForwardBasic(t *testing.T) {
+	m := NewMDCT(256)
+
+	input := make([]float32, 256)  // N input
+	output := make([]float32, 256) // N output (NOT N/2 - time-domain aliased form)
+
+	// Simple sine input
+	for i := range input {
+		input[i] = float32(math.Sin(float64(i) * 2 * math.Pi / 256))
+	}
+
+	m.Forward(input, output)
+
+	// Output should not be all zeros
+	hasNonZero := false
+	for _, v := range output {
+		if v != 0 {
+			hasNonZero = true
+			break
+		}
+	}
+	if !hasNonZero {
+		t.Error("MDCT of sine produced all zeros")
+	}
+
+	// Verify no NaN/Inf
+	for i, v := range output {
+		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			t.Errorf("output[%d] = %v (invalid)", i, v)
+		}
+	}
+}

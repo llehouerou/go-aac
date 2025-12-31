@@ -130,3 +130,69 @@ func (m *MDCT) IMDCT(xIn []float32, xOut []float32) {
 		xOut[n2+n4+3+2*k] = z1[n4-2-k].Re
 	}
 }
+
+// Forward performs the forward Modified Discrete Cosine Transform.
+// Input: N time samples (xIn)
+// Output: N time-domain aliased samples (xOut)
+//
+// This is primarily used for Long Term Prediction (LTP) in AAC.
+// The output is in TDAC (time-domain aliased cancellation) form.
+//
+// Ported from: faad_mdct() in ~/dev/faad2/libfaad/mdct.c:231-301
+func (m *MDCT) Forward(xIn []float32, xOut []float32) {
+	n2 := m.N2
+	n4 := m.N4
+	n8 := m.N8
+	sincos := m.sincos
+
+	// Scale factor for forward transform
+	scale := float32(m.N)
+
+	// Allocate work buffer
+	z1 := make([]fft.Complex, n4)
+
+	// Pre-FFT complex multiplication
+	for k := uint16(0); k < n8; k++ {
+		n2k := 2 * k
+
+		// First half
+		xRe := xIn[m.N-n4-1-n2k] + xIn[m.N-n4+n2k]
+		xIm := xIn[n4+n2k] - xIn[n4-1-n2k]
+
+		c1 := sincos[k].Re
+		c2 := sincos[k].Im
+
+		z1[k].Re, z1[k].Im = fft.ComplexMult(xRe, xIm, c1, c2)
+		z1[k].Re *= scale
+		z1[k].Im *= scale
+
+		// Second half
+		xRe = xIn[n2-1-n2k] - xIn[n2k]
+		xIm = xIn[n2+n2k] + xIn[m.N-1-n2k]
+
+		c1 = sincos[k+n8].Re
+		c2 = sincos[k+n8].Im
+
+		z1[k+n8].Re, z1[k+n8].Im = fft.ComplexMult(xRe, xIm, c1, c2)
+		z1[k+n8].Re *= scale
+		z1[k+n8].Im *= scale
+	}
+
+	// Complex FFT
+	m.cfft.Forward(z1)
+
+	// Post-FFT complex multiplication and output
+	for k := uint16(0); k < n4; k++ {
+		n2k := 2 * k
+
+		c1 := sincos[k].Re
+		c2 := sincos[k].Im
+
+		xRe, xIm := fft.ComplexMult(z1[k].Re, z1[k].Im, c1, c2)
+
+		xOut[n2k] = -xRe
+		xOut[n2-1-n2k] = xIm
+		xOut[n2+n2k] = -xIm
+		xOut[m.N-1-n2k] = xRe
+	}
+}
