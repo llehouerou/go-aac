@@ -167,3 +167,22 @@ func TestDecoder_allocateChannelBuffers_ZeroChannels(t *testing.T) {
 		t.Errorf("allocateChannelBuffers(0) failed: %v", err)
 	}
 }
+
+func TestDecoder_allocateLTPBuffers(t *testing.T) {
+	dec := NewDecoder()
+
+	// Allocate LTP for 2 channels
+	dec.allocateLTPBuffers(2)
+
+	// LTP buffers are 2*frameLength for overlap storage
+	expectedLen := 2 * int(dec.frameLength)
+
+	for ch := 0; ch < 2; ch++ {
+		if dec.ltPredStat[ch] == nil {
+			t.Errorf("ltPredStat[%d] not allocated", ch)
+		}
+		if len(dec.ltPredStat[ch]) != expectedLen {
+			t.Errorf("ltPredStat[%d] length: got %d, want %d", ch, len(dec.ltPredStat[ch]), expectedLen)
+		}
+	}
+}

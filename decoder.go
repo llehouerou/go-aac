@@ -141,3 +141,17 @@ func (d *Decoder) allocateChannelBuffers(numChannels uint8) error {
 
 	return nil
 }
+
+// allocateLTPBuffers allocates Long Term Prediction buffers for the specified channels.
+// LTP requires storing 2*frameLength samples for prediction.
+//
+// Ported from: decoder.c handling of LTP allocation
+func (d *Decoder) allocateLTPBuffers(numChannels uint8) {
+	bufLen := 2 * int(d.frameLength)
+
+	for ch := uint8(0); ch < numChannels; ch++ {
+		if d.ltPredStat[ch] == nil {
+			d.ltPredStat[ch] = make([]int16, bufLen)
+		}
+	}
+}
