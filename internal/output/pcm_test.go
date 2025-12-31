@@ -887,3 +887,130 @@ func TestOutputToPCM_WithUpmix(t *testing.T) {
 		}
 	}
 }
+
+// Tests for type-safe OutputToPCM variants
+
+func TestOutputToPCM16(t *testing.T) {
+	input := [][]float32{{100.0, 200.0}}
+	channelMap := []uint8{0}
+
+	output := OutputToPCM16(input, channelMap, 1, 2, false, false)
+	if output[0] != 100 || output[1] != 200 {
+		t.Errorf("unexpected output: %v", output)
+	}
+}
+
+func TestOutputToPCM16_Stereo(t *testing.T) {
+	input := [][]float32{
+		{100.0, 200.0, 300.0},    // Left
+		{-100.0, -200.0, -300.0}, // Right
+	}
+	channelMap := []uint8{0, 1}
+
+	output := OutputToPCM16(input, channelMap, 2, 3, false, false)
+
+	// Interleaved: L0, R0, L1, R1, L2, R2
+	expected := []int16{100, -100, 200, -200, 300, -300}
+	if len(output) != len(expected) {
+		t.Fatalf("output length = %d, want %d", len(output), len(expected))
+	}
+	for i, want := range expected {
+		if output[i] != want {
+			t.Errorf("output[%d] = %d, want %d", i, output[i], want)
+		}
+	}
+}
+
+func TestOutputToPCM24(t *testing.T) {
+	input := [][]float32{{100.0, 200.0}}
+	channelMap := []uint8{0}
+
+	output := OutputToPCM24(input, channelMap, 1, 2, false, false)
+
+	// Values scaled by 256
+	expected := []int32{25600, 51200}
+	for i, want := range expected {
+		if output[i] != want {
+			t.Errorf("output[%d] = %d, want %d", i, output[i], want)
+		}
+	}
+}
+
+func TestOutputToPCM32(t *testing.T) {
+	input := [][]float32{{100.0, 200.0}}
+	channelMap := []uint8{0}
+
+	output := OutputToPCM32(input, channelMap, 1, 2, false, false)
+
+	// Values scaled by 65536
+	expected := []int32{6553600, 13107200}
+	for i, want := range expected {
+		if output[i] != want {
+			t.Errorf("output[%d] = %d, want %d", i, output[i], want)
+		}
+	}
+}
+
+func TestOutputToPCMFloat32(t *testing.T) {
+	input := [][]float32{{32768.0}}
+	channelMap := []uint8{0}
+
+	output := OutputToPCMFloat32(input, channelMap, 1, 1, false, false)
+	if math.Abs(float64(output[0]-1.0)) > 1e-6 {
+		t.Errorf("output[0] = %v, want 1.0", output[0])
+	}
+}
+
+func TestOutputToPCMFloat64(t *testing.T) {
+	input := [][]float32{{32768.0}}
+	channelMap := []uint8{0}
+
+	output := OutputToPCMFloat64(input, channelMap, 1, 1, false, false)
+	if math.Abs(output[0]-1.0) > 1e-6 {
+		t.Errorf("output[0] = %v, want 1.0", output[0])
+	}
+}
+
+func TestOutputToPCM16_WithDownmix(t *testing.T) {
+	// 5.1 input: C, L, R, Ls, Rs (5 channels)
+	input := [][]float32{
+		{1000.0}, // Center
+		{500.0},  // Left
+		{600.0},  // Right
+		{200.0},  // Left Surround
+		{300.0},  // Right Surround
+	}
+	channelMap := []uint8{0, 1, 2, 3, 4}
+
+	output := OutputToPCM16(input, channelMap, 2, 1, true, false)
+
+	// Left: DMMul * (L + C*RSQRT2 + Ls*RSQRT2)
+	expectedL := DMMul * (input[1][0] + input[0][0]*RSQRT2 + input[3][0]*RSQRT2)
+	// Right: DMMul * (R + C*RSQRT2 + Rs*RSQRT2)
+	expectedR := DMMul * (input[2][0] + input[0][0]*RSQRT2 + input[4][0]*RSQRT2)
+
+	if output[0] != clip16(expectedL) {
+		t.Errorf("output[0] = %d, want %d", output[0], clip16(expectedL))
+	}
+	if output[1] != clip16(expectedR) {
+		t.Errorf("output[1] = %d, want %d", output[1], clip16(expectedR))
+	}
+}
+
+func TestOutputToPCM16_WithUpmix(t *testing.T) {
+	// Mono input, upmixed to stereo
+	input := [][]float32{
+		{100.0, 200.0},
+	}
+	channelMap := []uint8{0}
+
+	output := OutputToPCM16(input, channelMap, 2, 2, false, true)
+
+	// Mono duplicated: L0, R0, L1, R1
+	expected := []int16{100, 100, 200, 200}
+	for i, want := range expected {
+		if output[i] != want {
+			t.Errorf("output[%d] = %d, want %d", i, output[i], want)
+		}
+	}
+}

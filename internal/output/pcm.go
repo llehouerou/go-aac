@@ -436,3 +436,53 @@ func OutputToPCM(input [][]float32, channelMap []uint8, channels uint8,
 		return output
 	}
 }
+
+// OutputToPCM16 converts float32 samples to 16-bit PCM.
+// This is a type-safe wrapper around ToPCM16Bit.
+func OutputToPCM16(input [][]float32, channelMap []uint8, channels uint8,
+	frameLen uint16, downMatrix, upMatrix bool) []int16 {
+
+	output := make([]int16, int(frameLen)*int(channels))
+	ToPCM16Bit(input, channelMap, channels, frameLen, downMatrix, upMatrix, output)
+	return output
+}
+
+// OutputToPCM24 converts float32 samples to 24-bit PCM (stored in int32).
+// This is a type-safe wrapper around ToPCM24Bit.
+func OutputToPCM24(input [][]float32, channelMap []uint8, channels uint8,
+	frameLen uint16, downMatrix, upMatrix bool) []int32 {
+
+	output := make([]int32, int(frameLen)*int(channels))
+	ToPCM24Bit(input, channelMap, channels, frameLen, downMatrix, upMatrix, output)
+	return output
+}
+
+// OutputToPCM32 converts float32 samples to 32-bit PCM.
+// This is a type-safe wrapper around ToPCM32Bit.
+func OutputToPCM32(input [][]float32, channelMap []uint8, channels uint8,
+	frameLen uint16, downMatrix, upMatrix bool) []int32 {
+
+	output := make([]int32, int(frameLen)*int(channels))
+	ToPCM32Bit(input, channelMap, channels, frameLen, downMatrix, upMatrix, output)
+	return output
+}
+
+// OutputToPCMFloat32 converts float32 samples to normalized float32 PCM.
+// This is a type-safe wrapper around ToPCMFloat.
+func OutputToPCMFloat32(input [][]float32, channelMap []uint8, channels uint8,
+	frameLen uint16, downMatrix, upMatrix bool) []float32 {
+
+	output := make([]float32, int(frameLen)*int(channels))
+	ToPCMFloat(input, channelMap, channels, frameLen, downMatrix, upMatrix, output)
+	return output
+}
+
+// OutputToPCMFloat64 converts float32 samples to normalized float64 PCM.
+// This is a type-safe wrapper around ToPCMDouble.
+func OutputToPCMFloat64(input [][]float32, channelMap []uint8, channels uint8,
+	frameLen uint16, downMatrix, upMatrix bool) []float64 {
+
+	output := make([]float64, int(frameLen)*int(channels))
+	ToPCMDouble(input, channelMap, channels, frameLen, downMatrix, upMatrix, output)
+	return output
+}
