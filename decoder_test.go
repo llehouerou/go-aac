@@ -226,3 +226,29 @@ func TestDecoder_Close(t *testing.T) {
 		t.Error("pce not cleared after Close")
 	}
 }
+
+func TestDecoder_StreamInfo(t *testing.T) {
+	dec := NewDecoder()
+
+	// Simulate initialized state
+	dec.sfIndex = 4 // 44100 Hz
+	dec.objectType = uint8(ObjectTypeLC)
+	dec.channelConfiguration = 2 // Stereo
+	dec.frameLength = 1024
+
+	if dec.SampleRate() != 44100 {
+		t.Errorf("SampleRate: got %d, want 44100", dec.SampleRate())
+	}
+
+	if dec.Channels() != 2 {
+		t.Errorf("Channels: got %d, want 2", dec.Channels())
+	}
+
+	if dec.FrameLength() != 1024 {
+		t.Errorf("FrameLength: got %d, want 1024", dec.FrameLength())
+	}
+
+	if dec.ObjectType() != ObjectTypeLC {
+		t.Errorf("ObjectType: got %d, want %d", dec.ObjectType(), ObjectTypeLC)
+	}
+}

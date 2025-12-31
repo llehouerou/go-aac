@@ -156,6 +156,42 @@ func (d *Decoder) allocateLTPBuffers(numChannels uint8) {
 	}
 }
 
+// Sample rate lookup table.
+// Indices 0-11 ported from: sample_rates[] in ~/dev/faad2/libfaad/common.c:61-65
+// Index 12 (7350 Hz) is defined in ISO/IEC 14496-3.
+// Indices 13-15 are reserved (return 0).
+var sampleRates = [16]uint32{
+	96000, 88200, 64000, 48000, 44100, 32000,
+	24000, 22050, 16000, 12000, 11025, 8000,
+	7350, 0, 0, 0,
+}
+
+// SampleRate returns the current sample rate in Hz.
+func (d *Decoder) SampleRate() uint32 {
+	if d.sfIndex < 16 {
+		return sampleRates[d.sfIndex]
+	}
+	return 0
+}
+
+// Channels returns the channel configuration value.
+// This corresponds to the channel_configuration field in the audio specific config.
+// Note: This returns the raw configuration (0-7), not the actual channel count.
+// Configuration 0 means channels are defined elsewhere; 1=mono, 2=stereo, etc.
+func (d *Decoder) Channels() uint8 {
+	return d.channelConfiguration
+}
+
+// FrameLength returns the number of samples per frame per channel.
+func (d *Decoder) FrameLength() uint16 {
+	return d.frameLength
+}
+
+// ObjectType returns the AAC object type.
+func (d *Decoder) ObjectType() ObjectType {
+	return ObjectType(d.objectType)
+}
+
 // Close releases decoder resources.
 // The decoder should not be used after calling Close.
 //
