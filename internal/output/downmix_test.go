@@ -1,7 +1,10 @@
 // internal/output/downmix_test.go
 package output
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestChannelConstants(t *testing.T) {
 	// Verify channel positions match FAAD2 internal_channel ordering
@@ -25,5 +28,29 @@ func TestChannelConstants(t *testing.T) {
 	}
 	if ChannelLFE != 5 {
 		t.Errorf("ChannelLFE: got %d, want 5", ChannelLFE)
+	}
+}
+
+func TestDownmixConstants(t *testing.T) {
+	// DMMul = 1/(1+sqrt(2)+1/sqrt(2))
+	// Source: ~/dev/faad2/libfaad/output.c:41
+	expectedDMMul := float32(1.0 / (1.0 + math.Sqrt(2) + 1.0/math.Sqrt(2)))
+	if math.Abs(float64(DownmixMul-expectedDMMul)) > 1e-6 {
+		t.Errorf("DownmixMul: got %v, want %v", DownmixMul, expectedDMMul)
+	}
+
+	// InvSqrt2 = 1/sqrt(2) ≈ 0.7071
+	// Source: ~/dev/faad2/libfaad/output.c:42
+	expectedInvSqrt2 := float32(1.0 / math.Sqrt(2))
+	if math.Abs(float64(InvSqrt2-expectedInvSqrt2)) > 1e-6 {
+		t.Errorf("InvSqrt2: got %v, want %v", InvSqrt2, expectedInvSqrt2)
+	}
+
+	// Verify these match the existing DMMul and RSQRT2 from pcm.go
+	if DownmixMul != DMMul {
+		t.Errorf("DownmixMul != DMMul: %v vs %v", DownmixMul, DMMul)
+	}
+	if InvSqrt2 != RSQRT2 {
+		t.Errorf("InvSqrt2 != RSQRT2: %v vs %v", InvSqrt2, RSQRT2)
 	}
 }

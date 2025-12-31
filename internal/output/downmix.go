@@ -16,3 +16,17 @@ const (
 	ChannelRearRight  uint8 = 4 // Rear/surround right (Rs)
 	ChannelLFE        uint8 = 5 // Low Frequency Effects (subwoofer)
 )
+
+// Downmix matrix coefficients for 5.1 to stereo conversion.
+// Based on ITU-R BS.775-1 recommendation.
+//
+// Ported from: ~/dev/faad2/libfaad/output.c:41-42
+const (
+	// DownmixMul is the overall normalization factor.
+	// DownmixMul = 1/(1 + sqrt(2) + 1/sqrt(2)) ≈ 0.3204
+	// This prevents clipping when all channels are at full scale.
+	DownmixMul = float32(0.3203772410170407)
+
+	// InvSqrt2 is 1/sqrt(2) ≈ 0.7071, used for center and surround mixing.
+	InvSqrt2 = float32(0.7071067811865475244)
+)
