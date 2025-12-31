@@ -590,3 +590,103 @@ func TestToPCMFloat_NoClipping(t *testing.T) {
 		}
 	}
 }
+
+func TestToPCMDouble_Mono(t *testing.T) {
+	input := [][]float32{
+		{0.0, 32768.0, -32768.0},
+	}
+	channelMap := []uint8{0}
+
+	output := make([]float64, 3)
+	ToPCMDouble(input, channelMap, 1, 3, false, false, output)
+
+	expected := []float64{0.0, 1.0, -1.0}
+	for i, want := range expected {
+		if math.Abs(output[i]-want) > 1e-6 {
+			t.Errorf("output[%d] = %v, want %v", i, output[i], want)
+		}
+	}
+}
+
+func TestToPCMDouble_Stereo(t *testing.T) {
+	input := [][]float32{
+		{16384.0, 32768.0},
+		{-16384.0, -32768.0},
+	}
+	channelMap := []uint8{0, 1}
+
+	output := make([]float64, 4)
+	ToPCMDouble(input, channelMap, 2, 2, false, false, output)
+
+	expected := []float64{0.5, -0.5, 1.0, -1.0}
+	for i, want := range expected {
+		if math.Abs(output[i]-want) > 1e-6 {
+			t.Errorf("output[%d] = %v, want %v", i, output[i], want)
+		}
+	}
+}
+
+func TestToPCMDouble_StereoUpMatrix(t *testing.T) {
+	// Single channel input, upmixed to stereo
+	input := [][]float32{
+		{16384.0, 32768.0}, // 0.5, 1.0 after scaling
+	}
+	channelMap := []uint8{0}
+
+	output := make([]float64, 4) // 2 samples * 2 channels
+	ToPCMDouble(input, channelMap, 2, 2, false, true, output)
+
+	// Expected: L0=R0, L1=R1 (mono duplicated to both channels)
+	expected := []float64{0.5, 0.5, 1.0, 1.0}
+	for i, want := range expected {
+		if math.Abs(output[i]-want) > 1e-6 {
+			t.Errorf("output[%d] = %v, want %v", i, output[i], want)
+		}
+	}
+}
+
+func TestToPCMDouble_Downmix(t *testing.T) {
+	// 5.1 input: C, L, R, Ls, Rs (5 channels)
+	input := [][]float32{
+		{1000.0, 2000.0}, // Center
+		{500.0, 1000.0},  // Left
+		{600.0, 1200.0},  // Right
+		{200.0, 400.0},   // Left Surround
+		{300.0, 600.0},   // Right Surround
+	}
+	channelMap := []uint8{0, 1, 2, 3, 4}
+
+	output := make([]float64, 4) // 2 samples * 2 channels
+	ToPCMDouble(input, channelMap, 2, 2, true, false, output)
+
+	// Calculate expected left output for sample 0, scaled by FloatScale
+	expectedL0 := float64(DMMul*(input[1][0]+input[0][0]*RSQRT2+input[3][0]*RSQRT2)) * float64(FloatScale)
+	// Calculate expected right output for sample 0, scaled by FloatScale
+	expectedR0 := float64(DMMul*(input[2][0]+input[0][0]*RSQRT2+input[4][0]*RSQRT2)) * float64(FloatScale)
+
+	if math.Abs(output[0]-expectedL0) > 1e-6 {
+		t.Errorf("output[0] = %v, want %v", output[0], expectedL0)
+	}
+	if math.Abs(output[1]-expectedR0) > 1e-6 {
+		t.Errorf("output[1] = %v, want %v", output[1], expectedR0)
+	}
+}
+
+func TestToPCMDouble_NoClipping(t *testing.T) {
+	// Double output doesn't clip - values can exceed [-1.0, 1.0]
+	input := [][]float32{
+		{65536.0, -65536.0}, // 2.0, -2.0 after scaling (exceeds normalized range)
+	}
+	channelMap := []uint8{0}
+
+	output := make([]float64, 2)
+	ToPCMDouble(input, channelMap, 1, 2, false, false, output)
+
+	// Values should be 2.0 and -2.0, not clipped
+	expected := []float64{2.0, -2.0}
+	for i, want := range expected {
+		if math.Abs(output[i]-want) > 1e-6 {
+			t.Errorf("output[%d] = %v, want %v", i, output[i], want)
+		}
+	}
+}
