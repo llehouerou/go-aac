@@ -323,3 +323,42 @@ func TestFilterBankLTP_LongStartSequence(t *testing.T) {
 		}
 	}
 }
+
+func TestFilterBankLTP_LongStopSequence(t *testing.T) {
+	fb := NewFilterBank(1024)
+
+	inData := make([]float32, 2048)
+	for i := range inData {
+		inData[i] = float32(i%100) * 0.01
+	}
+
+	outMDCT := make([]float32, 1024)
+
+	// Should not panic
+	fb.FilterBankLTP(
+		syntax.LongStopSequence,
+		SineWindow,
+		SineWindow,
+		inData,
+		outMDCT,
+	)
+
+	// Output should not be all zeros
+	allZero := true
+	for _, v := range outMDCT {
+		if v != 0 {
+			allZero = false
+			break
+		}
+	}
+	if allZero {
+		t.Error("outMDCT should contain non-zero values")
+	}
+
+	// Verify no NaN/Inf
+	for i, v := range outMDCT {
+		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			t.Errorf("outMDCT[%d] = %v (invalid)", i, v)
+		}
+	}
+}
