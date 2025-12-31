@@ -21,3 +21,33 @@ const (
 	// ShortWindowSize is the size of short windows (128 samples = 1024/8).
 	ShortWindowSize = 128
 )
+
+// GetLongWindow returns the long window (1024 samples) for the given shape.
+// shape must be SineWindow (0) or KBDWindow (1).
+//
+// Ported from: fb->long_window[window_shape] in ~/dev/faad2/libfaad/filtbank.c:197
+func GetLongWindow(shape int) []float32 {
+	switch shape {
+	case SineWindow:
+		return sineLong1024[:]
+	case KBDWindow:
+		return kbdLong1024[:]
+	default:
+		panic("invalid window shape")
+	}
+}
+
+// GetShortWindow returns the short window (128 samples) for the given shape.
+// shape must be SineWindow (0) or KBDWindow (1).
+//
+// Ported from: fb->short_window[window_shape] in ~/dev/faad2/libfaad/filtbank.c:199
+func GetShortWindow(shape int) []float32 {
+	switch shape {
+	case SineWindow:
+		return sineShort128[:]
+	case KBDWindow:
+		return kbdShort128[:]
+	default:
+		panic("invalid window shape")
+	}
+}
