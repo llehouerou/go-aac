@@ -1,4 +1,4 @@
-.PHONY: tools fmt lint test coverage check build install-hooks testdata testdata-clean
+.PHONY: tools fmt lint test coverage check build install-hooks testdata testdata-clean generate-windows
 
 # Install/update tools
 tools:
@@ -49,3 +49,7 @@ testdata:
 # Clean generated test data
 testdata-clean:
 	rm -rf testdata/generated
+
+# Generate window tables from FAAD2
+generate-windows:
+	go run scripts/generate_windows.go
