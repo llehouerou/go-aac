@@ -200,3 +200,59 @@ func ToPCM24Bit(input [][]float32, channelMap []uint8, channels uint8,
 		}
 	}
 }
+
+// ToPCM32Bit converts float32 samples to 32-bit PCM.
+//
+// Input values are scaled by 65536 to extend from 16-bit to 32-bit range.
+// Output is clipped to int32 range.
+//
+// Parameters:
+//   - input: Per-channel float32 samples (input[channel][sample])
+//   - channelMap: Maps output channels to input channels
+//   - channels: Number of output channels
+//   - frameLen: Number of samples per channel
+//   - downMatrix: Enable 5.1 to stereo downmixing
+//   - upMatrix: Enable mono to stereo upmixing
+//   - output: Destination slice for int32 samples
+//
+// Ported from: to_PCM_32bit in ~/dev/faad2/libfaad/output.c:224-292
+func ToPCM32Bit(input [][]float32, channelMap []uint8, channels uint8,
+	frameLen uint16, downMatrix, upMatrix bool, output []int32) {
+
+	switch {
+	case channels == 1 && !downMatrix:
+		// Mono: direct copy with scaling and clipping
+		ch := channelMap[0]
+		for i := uint16(0); i < frameLen; i++ {
+			output[i] = clip32(input[ch][i] * 65536.0)
+		}
+
+	case channels == 2 && !downMatrix:
+		if upMatrix {
+			// Mono to stereo upmix: duplicate to both channels
+			ch := channelMap[0]
+			for i := uint16(0); i < frameLen; i++ {
+				sample := clip32(input[ch][i] * 65536.0)
+				output[i*2+0] = sample
+				output[i*2+1] = sample
+			}
+		} else {
+			// True stereo
+			chL := channelMap[0]
+			chR := channelMap[1]
+			for i := uint16(0); i < frameLen; i++ {
+				output[i*2+0] = clip32(input[chL][i] * 65536.0)
+				output[i*2+1] = clip32(input[chR][i] * 65536.0)
+			}
+		}
+
+	default:
+		// Generic multichannel with optional downmix
+		for ch := uint8(0); ch < channels; ch++ {
+			for i := uint16(0); i < frameLen; i++ {
+				inp := getSample(input, ch, i, downMatrix, channelMap)
+				output[int(i)*int(channels)+int(ch)] = clip32(inp * 65536.0)
+			}
+		}
+	}
+}
