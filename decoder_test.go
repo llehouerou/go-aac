@@ -81,3 +81,89 @@ func TestDecoder_Constants_MatchFAAD2(t *testing.T) {
 		})
 	}
 }
+
+func TestDecoder_allocateChannelBuffers(t *testing.T) {
+	dec := NewDecoder()
+
+	// Allocate for 2 channels
+	err := dec.allocateChannelBuffers(2)
+	if err != nil {
+		t.Fatalf("allocateChannelBuffers failed: %v", err)
+	}
+
+	// Check timeOut buffers
+	for ch := 0; ch < 2; ch++ {
+		if dec.timeOut[ch] == nil {
+			t.Errorf("timeOut[%d] not allocated", ch)
+		}
+		if len(dec.timeOut[ch]) != int(dec.frameLength) {
+			t.Errorf("timeOut[%d] length: got %d, want %d", ch, len(dec.timeOut[ch]), dec.frameLength)
+		}
+	}
+
+	// Check fbIntermed buffers
+	for ch := 0; ch < 2; ch++ {
+		if dec.fbIntermed[ch] == nil {
+			t.Errorf("fbIntermed[%d] not allocated", ch)
+		}
+		if len(dec.fbIntermed[ch]) != int(dec.frameLength) {
+			t.Errorf("fbIntermed[%d] length: got %d, want %d", ch, len(dec.fbIntermed[ch]), dec.frameLength)
+		}
+	}
+}
+
+func TestDecoder_allocateChannelBuffers_Idempotent(t *testing.T) {
+	dec := NewDecoder()
+
+	// Allocate for 2 channels
+	err := dec.allocateChannelBuffers(2)
+	if err != nil {
+		t.Fatalf("first allocateChannelBuffers failed: %v", err)
+	}
+
+	// Store pointers to original buffers
+	origTimeOut0 := dec.timeOut[0]
+	origTimeOut1 := dec.timeOut[1]
+	origFbIntermed0 := dec.fbIntermed[0]
+	origFbIntermed1 := dec.fbIntermed[1]
+
+	// Call again - should be idempotent (no-op)
+	err = dec.allocateChannelBuffers(2)
+	if err != nil {
+		t.Fatalf("second allocateChannelBuffers failed: %v", err)
+	}
+
+	// Verify buffers are the same (not reallocated)
+	if &dec.timeOut[0][0] != &origTimeOut0[0] {
+		t.Error("timeOut[0] was reallocated, should be idempotent")
+	}
+	if &dec.timeOut[1][0] != &origTimeOut1[0] {
+		t.Error("timeOut[1] was reallocated, should be idempotent")
+	}
+	if &dec.fbIntermed[0][0] != &origFbIntermed0[0] {
+		t.Error("fbIntermed[0] was reallocated, should be idempotent")
+	}
+	if &dec.fbIntermed[1][0] != &origFbIntermed1[0] {
+		t.Error("fbIntermed[1] was reallocated, should be idempotent")
+	}
+}
+
+func TestDecoder_allocateChannelBuffers_TooManyChannels(t *testing.T) {
+	dec := NewDecoder()
+
+	// Try to allocate more than maxChannels
+	err := dec.allocateChannelBuffers(maxChannels + 1)
+	if err != ErrInvalidNumChannels {
+		t.Errorf("expected ErrInvalidNumChannels, got %v", err)
+	}
+}
+
+func TestDecoder_allocateChannelBuffers_ZeroChannels(t *testing.T) {
+	dec := NewDecoder()
+
+	// Zero channels should be valid (no-op)
+	err := dec.allocateChannelBuffers(0)
+	if err != nil {
+		t.Errorf("allocateChannelBuffers(0) failed: %v", err)
+	}
+}

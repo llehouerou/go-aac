@@ -115,3 +115,29 @@ func (d *Decoder) SetConfiguration(cfg Config) {
 	d.config = cfg
 	d.downMatrix = cfg.DownMatrix
 }
+
+// allocateChannelBuffers allocates per-channel buffers for the specified number of channels.
+// Buffers are only allocated once; subsequent calls with the same or fewer channels are no-ops.
+//
+// Ported from: allocate_single_channel() and allocate_channel_pair() in ~/dev/faad2/libfaad/specrec.c:700-850
+func (d *Decoder) allocateChannelBuffers(numChannels uint8) error {
+	if numChannels > maxChannels {
+		return ErrInvalidNumChannels
+	}
+
+	frameLen := int(d.frameLength)
+
+	for ch := uint8(0); ch < numChannels; ch++ {
+		// Allocate timeOut buffer if not already allocated
+		if d.timeOut[ch] == nil {
+			d.timeOut[ch] = make([]float32, frameLen)
+		}
+
+		// Allocate fbIntermed buffer if not already allocated
+		if d.fbIntermed[ch] == nil {
+			d.fbIntermed[ch] = make([]float32, frameLen)
+		}
+	}
+
+	return nil
+}
