@@ -224,3 +224,68 @@ func TestGetDownmixedSample_Passthrough(t *testing.T) {
 		t.Errorf("passthrough ch1: got %v, want 200.0", sample)
 	}
 }
+
+func TestDownmixFrame(t *testing.T) {
+	// 5.1 input with 3 samples per channel
+	input := [][]float32{
+		{1000.0, 2000.0, 3000.0}, // Center
+		{500.0, 1000.0, 1500.0},  // Front Left
+		{600.0, 1200.0, 1800.0},  // Front Right
+		{200.0, 400.0, 600.0},    // Rear Left
+		{300.0, 600.0, 900.0},    // Rear Right
+		{100.0, 200.0, 300.0},    // LFE
+	}
+	channelMap := []uint8{0, 1, 2, 3, 4, 5}
+
+	dm := NewDownmixer()
+	left, right := dm.DownmixFrame(input, channelMap, 3)
+
+	if len(left) != 3 || len(right) != 3 {
+		t.Fatalf("expected 3 samples, got left=%d, right=%d", len(left), len(right))
+	}
+
+	// Verify first sample
+	expectedL0 := DownmixMul * (input[1][0] + input[0][0]*InvSqrt2 + input[3][0]*InvSqrt2)
+	expectedR0 := DownmixMul * (input[2][0] + input[0][0]*InvSqrt2 + input[4][0]*InvSqrt2)
+
+	if math.Abs(float64(left[0]-expectedL0)) > 0.01 {
+		t.Errorf("left[0]: got %v, want %v", left[0], expectedL0)
+	}
+	if math.Abs(float64(right[0]-expectedR0)) > 0.01 {
+		t.Errorf("right[0]: got %v, want %v", right[0], expectedR0)
+	}
+
+	// Verify last sample
+	expectedL2 := DownmixMul * (input[1][2] + input[0][2]*InvSqrt2 + input[3][2]*InvSqrt2)
+	expectedR2 := DownmixMul * (input[2][2] + input[0][2]*InvSqrt2 + input[4][2]*InvSqrt2)
+
+	if math.Abs(float64(left[2]-expectedL2)) > 0.01 {
+		t.Errorf("left[2]: got %v, want %v", left[2], expectedL2)
+	}
+	if math.Abs(float64(right[2]-expectedR2)) > 0.01 {
+		t.Errorf("right[2]: got %v, want %v", right[2], expectedR2)
+	}
+}
+
+func TestDownmixFrame_Disabled(t *testing.T) {
+	input := [][]float32{
+		{1000.0, 2000.0}, // Center
+		{500.0, 1000.0},  // Front Left
+		{600.0, 1200.0},  // Front Right
+		{200.0, 400.0},   // Rear Left
+		{300.0, 600.0},   // Rear Right
+		{100.0, 200.0},   // LFE
+	}
+	channelMap := []uint8{0, 1, 2, 3, 4, 5}
+
+	dm := &Downmixer{Enabled: false}
+	left, right := dm.DownmixFrame(input, channelMap, 2)
+
+	// When disabled, return front L/R directly
+	if left[0] != 500.0 || left[1] != 1000.0 {
+		t.Errorf("disabled left: got %v, want [500.0, 1000.0]", left)
+	}
+	if right[0] != 600.0 || right[1] != 1200.0 {
+		t.Errorf("disabled right: got %v, want [600.0, 1200.0]", right)
+	}
+}

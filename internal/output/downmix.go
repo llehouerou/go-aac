@@ -103,6 +103,24 @@ func (d *Downmixer) Downmix5_1ToStereo(input [][]float32, channelMap []uint8, sa
 	return left, right
 }
 
+// DownmixFrame converts a full frame of 5.1 audio to stereo.
+//
+// Returns two slices: left and right channel output samples.
+// The output length matches frameLen.
+//
+// This is more efficient than calling Downmix5_1ToStereo for each sample
+// when processing complete frames.
+func (d *Downmixer) DownmixFrame(input [][]float32, channelMap []uint8, frameLen uint16) (left, right []float32) {
+	left = make([]float32, frameLen)
+	right = make([]float32, frameLen)
+
+	for i := uint16(0); i < frameLen; i++ {
+		left[i], right[i] = d.Downmix5_1ToStereo(input, channelMap, i)
+	}
+
+	return left, right
+}
+
 // GetDownmixedSample returns a sample for the specified output channel,
 // applying 5.1 to stereo downmix if enabled.
 //
