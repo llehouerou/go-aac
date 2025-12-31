@@ -63,3 +63,37 @@ func clip32(sample float32) int32 {
 	}
 	return int32(math.RoundToEven(float64(sample)))
 }
+
+// ToPCM16Bit converts float32 samples to 16-bit PCM.
+//
+// Parameters:
+//   - input: Per-channel float32 samples (input[channel][sample])
+//   - channelMap: Maps output channels to input channels
+//   - channels: Number of output channels
+//   - frameLen: Number of samples per channel
+//   - downMatrix: Enable 5.1 to stereo downmixing
+//   - upMatrix: Enable mono to stereo upmixing
+//   - output: Destination slice for interleaved int16 samples
+//
+// Ported from: to_PCM_16bit in ~/dev/faad2/libfaad/output.c:89-152
+func ToPCM16Bit(input [][]float32, channelMap []uint8, channels uint8,
+	frameLen uint16, downMatrix, upMatrix bool, output []int16) {
+
+	switch channels {
+	case 1:
+		// Mono: direct copy with clipping
+		ch := channelMap[0]
+		for i := uint16(0); i < frameLen; i++ {
+			output[i] = clip16(input[ch][i])
+		}
+
+	default:
+		// Generic multichannel (will be expanded later)
+		for i := uint16(0); i < frameLen; i++ {
+			for ch := uint8(0); ch < channels; ch++ {
+				inp := input[channelMap[ch]][i]
+				output[int(i)*int(channels)+int(ch)] = clip16(inp)
+			}
+		}
+	}
+}

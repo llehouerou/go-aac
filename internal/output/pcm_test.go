@@ -149,3 +149,21 @@ func TestClip32(t *testing.T) {
 		})
 	}
 }
+
+func TestToPCM16Bit_Mono(t *testing.T) {
+	// Single channel input
+	input := [][]float32{
+		{0.0, 100.0, -100.0, 32767.0, -32768.0, 40000.0, -40000.0},
+	}
+	channelMap := []uint8{0}
+
+	output := make([]int16, 7)
+	ToPCM16Bit(input, channelMap, 1, 7, false, false, output)
+
+	expected := []int16{0, 100, -100, 32767, -32768, 32767, -32768}
+	for i, want := range expected {
+		if output[i] != want {
+			t.Errorf("output[%d] = %d, want %d", i, output[i], want)
+		}
+	}
+}
