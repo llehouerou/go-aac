@@ -10,3 +10,14 @@ func TestDRCRefLevel(t *testing.T) {
 		t.Errorf("DRCRefLevel: got %d, want 80", DRCRefLevel)
 	}
 }
+
+func TestNewDRC(t *testing.T) {
+	drc := NewDRC(0.5, 0.75)
+
+	if drc.Cut != 0.5 {
+		t.Errorf("Cut: got %v, want 0.5", drc.Cut)
+	}
+	if drc.Boost != 0.75 {
+		t.Errorf("Boost: got %v, want 0.75", drc.Boost)
+	}
+}
