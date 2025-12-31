@@ -69,3 +69,43 @@ func TestClip16(t *testing.T) {
 		})
 	}
 }
+
+func TestClip24(t *testing.T) {
+	tests := []struct {
+		name  string
+		input float32
+		want  int32
+	}{
+		// Normal range (input is already scaled by 256)
+		{"zero", 0.0, 0},
+		{"positive", 256000.5, 256000}, // Note: 256000.5 rounds to 256000 (even)
+		{"negative", -256000.5, -256000},
+
+		// Edge cases at 24-bit boundaries
+		{"max_boundary", 8388607.0, 8388607},
+		{"min_boundary", -8388608.0, -8388608},
+
+		// Clipping cases
+		{"clip_positive", 10000000.0, 8388607},
+		{"clip_negative", -10000000.0, -8388608},
+		{"clip_max_float", 1e10, 8388607},
+		{"clip_min_float", -1e10, -8388608},
+
+		// Rounding behavior (matches lrintf: round to nearest, ties to even)
+		{"round_up", 0.6, 1},
+		{"round_down", 0.4, 0},
+		{"round_half_even_up", 1.5, 2},   // 1.5 -> 2 (nearest even)
+		{"round_half_even_down", 2.5, 2}, // 2.5 -> 2 (nearest even)
+		{"round_neg_up", -0.4, 0},
+		{"round_neg_down", -0.6, -1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := clip24(tt.input)
+			if got != tt.want {
+				t.Errorf("clip24(%v) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}

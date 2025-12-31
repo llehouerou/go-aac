@@ -33,3 +33,18 @@ func clip16(sample float32) int16 {
 	// Round to nearest (lrintf behavior)
 	return int16(math.RoundToEven(float64(sample)))
 }
+
+// clip24 clips and rounds a float32 to 24-bit signed integer range.
+// Input should already be scaled by 256.
+//
+// Ported from: ~/dev/faad2/libfaad/output.c:154-172 (24-bit section)
+func clip24(sample float32) int32 {
+	// Clipping to 24-bit signed range
+	if sample >= 8388607.0 {
+		return 8388607
+	}
+	if sample <= -8388608.0 {
+		return -8388608
+	}
+	return int32(math.RoundToEven(float64(sample)))
+}
