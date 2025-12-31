@@ -64,6 +64,34 @@ func clip32(sample float32) int32 {
 	return int32(math.RoundToEven(float64(sample)))
 }
 
+// getSample retrieves a sample, optionally applying 5.1 to stereo downmix.
+//
+// When downMatrix is true, channels 0-4 are: C, L, R, Ls, Rs
+// Output channel 0 = L + C*RSQRT2 + Ls*RSQRT2, scaled by DM_MUL
+// Output channel 1 = R + C*RSQRT2 + Rs*RSQRT2, scaled by DM_MUL
+//
+// Ported from: get_sample in ~/dev/faad2/libfaad/output.c:45-61
+func getSample(input [][]float32, channel uint8, sample uint16,
+	downMatrix bool, channelMap []uint8) float32 {
+
+	if !downMatrix {
+		return input[channelMap[channel]][sample]
+	}
+
+	// 5.1 to stereo downmix
+	// channelMap[0] = Center, [1] = Left, [2] = Right, [3] = Ls, [4] = Rs
+	if channel == 0 {
+		// Left output
+		return DMMul * (input[channelMap[1]][sample] +
+			input[channelMap[0]][sample]*RSQRT2 +
+			input[channelMap[3]][sample]*RSQRT2)
+	}
+	// Right output
+	return DMMul * (input[channelMap[2]][sample] +
+		input[channelMap[0]][sample]*RSQRT2 +
+		input[channelMap[4]][sample]*RSQRT2)
+}
+
 // ToPCM16Bit converts float32 samples to 16-bit PCM.
 //
 // Parameters:

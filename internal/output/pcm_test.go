@@ -206,3 +206,50 @@ func TestToPCM16Bit_StereoUpMatrix(t *testing.T) {
 		}
 	}
 }
+
+func TestGetSample_NoDownmix(t *testing.T) {
+	input := [][]float32{
+		{100.0, 200.0},
+		{-100.0, -200.0},
+	}
+	channelMap := []uint8{0, 1}
+
+	// Without downmix, just returns the requested channel
+	got := getSample(input, 0, 0, false, channelMap)
+	if got != 100.0 {
+		t.Errorf("getSample(ch0, s0) = %v, want 100.0", got)
+	}
+
+	got = getSample(input, 1, 1, false, channelMap)
+	if got != -200.0 {
+		t.Errorf("getSample(ch1, s1) = %v, want -200.0", got)
+	}
+}
+
+func TestGetSample_Downmix5_1ToStereo(t *testing.T) {
+	// 5.1 channel layout: C, L, R, Ls, Rs (indices 0-4)
+	// FAAD2 internal_channel order: [0]=C, [1]=L, [2]=R, [3]=Ls, [4]=Rs
+	input := [][]float32{
+		{1000.0}, // Center
+		{500.0},  // Left
+		{600.0},  // Right
+		{200.0},  // Left Surround
+		{300.0},  // Right Surround
+	}
+	channelMap := []uint8{0, 1, 2, 3, 4}
+
+	// Left output = L + C*RSQRT2 + Ls*RSQRT2, all scaled by DM_MUL
+	// Expected: DM_MUL * (500 + 1000*0.7071 + 200*0.7071) = 0.3204 * 1348.5 ~ 432.0
+	gotL := getSample(input, 0, 0, true, channelMap)
+	expectedL := DMMul * (input[1][0] + input[0][0]*RSQRT2 + input[3][0]*RSQRT2)
+	if math.Abs(float64(gotL-expectedL)) > 0.01 {
+		t.Errorf("getSample(ch0, downmix) = %v, want %v", gotL, expectedL)
+	}
+
+	// Right output = R + C*RSQRT2 + Rs*RSQRT2, all scaled by DM_MUL
+	gotR := getSample(input, 1, 0, true, channelMap)
+	expectedR := DMMul * (input[2][0] + input[0][0]*RSQRT2 + input[4][0]*RSQRT2)
+	if math.Abs(float64(gotR-expectedR)) > 0.01 {
+		t.Errorf("getSample(ch1, downmix) = %v, want %v", gotR, expectedR)
+	}
+}
