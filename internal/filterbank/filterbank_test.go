@@ -1,6 +1,7 @@
 package filterbank
 
 import (
+	"math"
 	"testing"
 
 	"github.com/llehouerou/go-aac/internal/syntax"
@@ -240,5 +241,46 @@ func TestIFilterBank_MixedWindowShapes(t *testing.T) {
 	// Verify no panics
 	if len(timeOut) != 1024 {
 		t.Errorf("timeOut length = %d, expected 1024", len(timeOut))
+	}
+}
+
+func TestFilterBankLTP_OnlyLongSequence(t *testing.T) {
+	fb := NewFilterBank(1024)
+
+	// Input: 2*frameLength time samples (2048)
+	inData := make([]float32, 2048)
+	for i := range inData {
+		inData[i] = float32(i%100) * 0.01
+	}
+
+	// Output: frameLength MDCT coefficients (1024)
+	outMDCT := make([]float32, 1024)
+
+	// Call FilterBankLTP
+	fb.FilterBankLTP(
+		syntax.OnlyLongSequence,
+		SineWindow, // window_shape
+		SineWindow, // window_shape_prev
+		inData,
+		outMDCT,
+	)
+
+	// Output should not be all zeros
+	allZero := true
+	for _, v := range outMDCT {
+		if v != 0 {
+			allZero = false
+			break
+		}
+	}
+	if allZero {
+		t.Error("outMDCT should contain non-zero values after FilterBankLTP")
+	}
+
+	// Verify no NaN or Inf values
+	for i, v := range outMDCT {
+		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			t.Errorf("outMDCT[%d] = %v (invalid)", i, v)
+		}
 	}
 }
