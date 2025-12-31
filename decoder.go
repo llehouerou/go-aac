@@ -1,0 +1,106 @@
+// decoder.go
+package aac
+
+// Maximum limits for decoder state arrays.
+// These match the constants in internal/syntax/limits.go but are duplicated
+// here to avoid import cycles (syntax imports aac for AudioSpecificConfig).
+//
+//nolint:unused // Used in Decoder struct field sizing
+const (
+	maxChannels       = 64 // Maximum number of channels
+	maxSyntaxElements = 48 // Maximum number of syntax elements
+)
+
+// Decoder is the main AAC decoder.
+// It maintains all state needed for decoding an AAC stream.
+//
+// Ported from: NeAACDecStruct in ~/dev/faad2/libfaad/structs.h:332-439
+//
+//nolint:unused // Fields are used incrementally as decoder features are implemented
+type Decoder struct {
+	// Configuration
+	config Config
+
+	// Stream format detection
+	adtsHeaderPresent bool
+	adifHeaderPresent bool
+	latmHeaderPresent bool
+
+	// Stream parameters
+	sfIndex              uint8  // Sample frequency index
+	objectType           uint8  // Audio object type
+	channelConfiguration uint8  // Channel configuration
+	frameLength          uint16 // Frame length (typically 1024)
+
+	// Frame state
+	frame             uint32 // Current frame number
+	postSeekResetFlag bool   // Reset state after seek
+
+	// Output configuration
+	sampleBufferSize uint32 // Output buffer size
+	downMatrix       bool   // Enable 5.1 to stereo downmix
+	upMatrix         bool   // Enable mono to stereo upmix
+	firstSynEle      bool   // First syntax element of frame
+	hasLFE           bool   // Stream has LFE channel
+
+	// Per-frame element info
+	frChannels uint8 // Channels in current frame
+	frChEle    uint8 // Elements in current frame
+
+	// Element tracking
+	elementOutputChannels [maxSyntaxElements]uint8 // Output channels per element
+	elementAlloced        [maxSyntaxElements]bool  // Element buffers allocated
+
+	// Processing components
+	// Note: FilterBank and DRC are typed as 'any' to avoid import cycles.
+	// The filterbank and output packages import syntax, which imports aac.
+	// These are initialized lazily during first decode.
+	fb  any // Filter bank for IMDCT (*filterbank.FilterBank)
+	drc any // Dynamic range control (*output.DRC)
+
+	// Per-channel state
+	windowShapePrev [maxChannels]uint8     // Previous window shape
+	ltpLag          [maxChannels]uint16    // LTP lag values
+	timeOut         [maxChannels][]float32 // Time-domain output buffers
+	fbIntermed      [maxChannels][]float32 // Filter bank intermediate buffers
+
+	// LTP prediction state (for LTP profile)
+	ltPredStat [maxChannels][]int16
+
+	// RNG state (for PNS)
+	rngState1 uint32
+	rngState2 uint32
+
+	// Program config
+	pceSet          bool               // PCE has been parsed
+	pce             any                // Program config element (*syntax.ProgramConfig)
+	elementID       [maxChannels]uint8 // Element ID per channel
+	internalChannel [maxChannels]uint8 // Internal channel mapping
+}
+
+// NewDecoder creates a new AAC decoder with default settings.
+//
+// Ported from: NeAACDecOpen() in ~/dev/faad2/libfaad/decoder.c:188-240
+func NewDecoder() *Decoder {
+	d := &Decoder{
+		config: Config{
+			DefObjectType: ObjectTypeLC,
+			DefSampleRate: 44100,
+			OutputFormat:  OutputFormat16Bit,
+		},
+		frameLength: 1024,
+		rngState1:   0x12345678,
+		rngState2:   0x87654321,
+	}
+
+	// Note: FilterBank and DRC are initialized lazily during first decode
+	// to avoid import cycles. The filterbank and output packages import
+	// syntax, which imports aac.
+
+	return d
+}
+
+// Config returns the current decoder configuration.
+func (d *Decoder) Config() Config {
+	return d.config
+}
