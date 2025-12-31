@@ -12,6 +12,7 @@ type MDCT struct {
 	N8     uint16        // N/8
 	cfft   *fft.CFFT     // Complex FFT of size N/4
 	sincos []fft.Complex // Pre/post twiddle factors (N/4 entries)
+	work   []fft.Complex // Reusable work buffer for transforms
 }
 
 // NewMDCT creates and initializes an MDCT for the given transform size.
@@ -38,6 +39,9 @@ func NewMDCT(n uint16) *MDCT {
 	if m.sincos == nil {
 		panic("MDCT size not supported: no twiddle table available")
 	}
+
+	// Pre-allocate work buffer for transforms
+	m.work = make([]fft.Complex, m.N4)
 
 	return m
 }
@@ -72,8 +76,8 @@ func (m *MDCT) IMDCT(xIn []float32, xOut []float32) {
 	n8 := m.N8
 	sincos := m.sincos
 
-	// Allocate work buffer for complex FFT
-	z1 := make([]fft.Complex, n4)
+	// Use pre-allocated work buffer
+	z1 := m.work
 
 	// Pre-IFFT complex multiplication
 	// Z1[k] = ComplexMult(X_in[2*k], X_in[N/2-1-2*k], sincos[k])
@@ -148,8 +152,8 @@ func (m *MDCT) Forward(xIn []float32, xOut []float32) {
 	// Scale factor for forward transform
 	scale := float32(m.N)
 
-	// Allocate work buffer
-	z1 := make([]fft.Complex, n4)
+	// Use pre-allocated work buffer
+	z1 := m.work
 
 	// Pre-FFT complex multiplication
 	for k := uint16(0); k < n8; k++ {

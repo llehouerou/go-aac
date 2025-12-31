@@ -37,6 +37,9 @@ func TestNewMDCT_CreatesValidInstance(t *testing.T) {
 		if len(m.sincos) != int(tt.fftSize) {
 			t.Errorf("sincos length = %d, want %d", len(m.sincos), tt.fftSize)
 		}
+		if len(m.work) != int(tt.fftSize) {
+			t.Errorf("work length = %d, want %d", len(m.work), tt.fftSize)
+		}
 	}
 }
 
@@ -226,4 +229,26 @@ func TestMDCT_RoundTrip(t *testing.T) {
 
 	t.Logf("Round-trip correlation: product=%v, input_energy=%v, output_energy=%v",
 		sumProduct, sumInputSq, sumOutputSq)
+}
+
+func TestMDCT_MultipleCallsNoAllocation(t *testing.T) {
+	m := NewMDCT(256)
+
+	input := make([]float32, 128)
+	output := make([]float32, 256)
+
+	// Call IMDCT multiple times - should not panic or leak
+	for i := 0; i < 100; i++ {
+		input[0] = float32(i)
+		m.IMDCT(input, output)
+	}
+
+	// Also test Forward multiple times
+	forwardInput := make([]float32, 256)
+	forwardOutput := make([]float32, 256)
+
+	for i := 0; i < 100; i++ {
+		forwardInput[0] = float32(i)
+		m.Forward(forwardInput, forwardOutput)
+	}
 }
