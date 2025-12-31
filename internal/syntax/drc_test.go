@@ -38,11 +38,3 @@ func TestDRCInfo_ExcludeMask(t *testing.T) {
 		t.Errorf("AdditionalExcludedChns should have %d elements", MaxChannels)
 	}
 }
-
-func TestDRCInfo_Control(t *testing.T) {
-	var drc DRCInfo
-
-	// Control parameters are float32
-	drc.Ctrl1 = 1.0
-	drc.Ctrl2 = 1.0
-}

@@ -53,6 +53,11 @@ func (d *DRC) Decode(info *syntax.DRCInfo, spec []float32) {
 	bottom := uint16(0)
 	numBands := info.NumBands
 
+	// Clamp numBands to array size
+	if numBands > 17 {
+		numBands = 17
+	}
+
 	// Default band_top for single band
 	if numBands == 1 {
 		info.BandTop[0] = 1024/4 - 1

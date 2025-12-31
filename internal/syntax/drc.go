@@ -20,8 +20,4 @@ type DRCInfo struct {
 
 	ExcludeMask            [MaxChannels]uint8 // Channel exclude mask
 	AdditionalExcludedChns [MaxChannels]uint8 // Additional excluded channels
-
-	// Control parameters (set by application)
-	Ctrl1 float32 // DRC cut control (0.0-1.0)
-	Ctrl2 float32 // DRC boost control (0.0-1.0)
 }
