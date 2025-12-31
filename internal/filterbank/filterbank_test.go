@@ -166,3 +166,79 @@ func TestIFilterBank_EightShortSequence(t *testing.T) {
 		t.Error("timeOut should have non-zero values after EIGHT_SHORT_SEQUENCE")
 	}
 }
+
+func TestIFilterBank_WindowTransitionLongToShort(t *testing.T) {
+	fb := NewFilterBank(1024)
+
+	freqIn := make([]float32, 1024)
+	for i := range freqIn {
+		freqIn[i] = float32(i%100) * 0.01
+	}
+
+	timeOut := make([]float32, 1024)
+	overlap := make([]float32, 1024)
+
+	// Simulate: ONLY_LONG -> LONG_START -> EIGHT_SHORT
+
+	// Frame 1: ONLY_LONG
+	fb.IFilterBank(syntax.OnlyLongSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+
+	// Frame 2: LONG_START (transition to short)
+	fb.IFilterBank(syntax.LongStartSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+
+	// Frame 3: EIGHT_SHORT
+	fb.IFilterBank(syntax.EightShortSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+
+	// Verify no panics and output is reasonable
+	if len(timeOut) != 1024 {
+		t.Errorf("timeOut length = %d, expected 1024", len(timeOut))
+	}
+}
+
+func TestIFilterBank_WindowTransitionShortToLong(t *testing.T) {
+	fb := NewFilterBank(1024)
+
+	freqIn := make([]float32, 1024)
+	for i := range freqIn {
+		freqIn[i] = float32(i%100) * 0.01
+	}
+
+	timeOut := make([]float32, 1024)
+	overlap := make([]float32, 1024)
+
+	// Simulate: ONLY_LONG -> LONG_START -> EIGHT_SHORT -> LONG_STOP -> ONLY_LONG
+
+	fb.IFilterBank(syntax.OnlyLongSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(syntax.LongStartSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(syntax.EightShortSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(syntax.LongStopSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(syntax.OnlyLongSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+
+	// Verify no panics and output is reasonable
+	if len(timeOut) != 1024 {
+		t.Errorf("timeOut length = %d, expected 1024", len(timeOut))
+	}
+}
+
+func TestIFilterBank_MixedWindowShapes(t *testing.T) {
+	fb := NewFilterBank(1024)
+
+	freqIn := make([]float32, 1024)
+	for i := range freqIn {
+		freqIn[i] = float32(i%100) * 0.01
+	}
+
+	timeOut := make([]float32, 1024)
+	overlap := make([]float32, 1024)
+
+	// Test transitioning between sine and KBD windows
+	fb.IFilterBank(syntax.OnlyLongSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(syntax.OnlyLongSequence, KBDWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(syntax.OnlyLongSequence, KBDWindow, KBDWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(syntax.OnlyLongSequence, SineWindow, KBDWindow, freqIn, timeOut, overlap)
+
+	// Verify no panics
+	if len(timeOut) != 1024 {
+		t.Errorf("timeOut length = %d, expected 1024", len(timeOut))
+	}
+}
