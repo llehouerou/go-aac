@@ -48,3 +48,18 @@ func clip24(sample float32) int32 {
 	}
 	return int32(math.RoundToEven(float64(sample)))
 }
+
+// clip32 clips and rounds a float32 to int32 range.
+// Input should already be scaled by 65536.
+//
+// Ported from: ~/dev/faad2/libfaad/output.c:224-243 (32-bit section)
+func clip32(sample float32) int32 {
+	// Clipping to 32-bit signed range
+	if sample >= 2147483647.0 {
+		return 2147483647
+	}
+	if sample <= -2147483648.0 {
+		return -2147483648
+	}
+	return int32(math.RoundToEven(float64(sample)))
+}
