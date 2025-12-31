@@ -368,3 +368,71 @@ func ToPCMDouble(input [][]float32, channelMap []uint8, channels uint8,
 		}
 	}
 }
+
+// PCM format constants matching FAAD2.
+// Ported from: ~/dev/faad2/include/neaacdec.h
+const (
+	FormatInt16   uint8 = 1 // FAAD_FMT_16BIT
+	FormatInt24   uint8 = 2 // FAAD_FMT_24BIT
+	FormatInt32   uint8 = 3 // FAAD_FMT_32BIT
+	FormatFloat32 uint8 = 4 // FAAD_FMT_FLOAT
+	FormatFloat64 uint8 = 5 // FAAD_FMT_DOUBLE
+)
+
+// OutputToPCM converts float32 samples to the requested PCM format.
+//
+// Returns a slice of the appropriate type:
+//   - format 1 (16-bit): []int16
+//   - format 2 (24-bit): []int32
+//   - format 3 (32-bit): []int32
+//   - format 4 (float):  []float32
+//   - format 5 (double): []float64
+//
+// Parameters:
+//   - input: Per-channel float32 samples (input[channel][sample])
+//   - channelMap: Maps output channels to input channels
+//   - channels: Number of output channels
+//   - frameLen: Number of samples per channel
+//   - format: Output format (1=16bit, 2=24bit, 3=32bit, 4=float, 5=double)
+//   - downMatrix: Enable 5.1 to stereo downmixing
+//   - upMatrix: Enable mono to stereo upmixing
+//
+// Ported from: output_to_PCM in ~/dev/faad2/libfaad/output.c:398-437
+func OutputToPCM(input [][]float32, channelMap []uint8, channels uint8,
+	frameLen uint16, format uint8, downMatrix, upMatrix bool) interface{} {
+
+	totalSamples := int(frameLen) * int(channels)
+
+	switch format {
+	case FormatInt16: // FAAD_FMT_16BIT
+		output := make([]int16, totalSamples)
+		ToPCM16Bit(input, channelMap, channels, frameLen, downMatrix, upMatrix, output)
+		return output
+
+	case FormatInt24: // FAAD_FMT_24BIT
+		output := make([]int32, totalSamples)
+		ToPCM24Bit(input, channelMap, channels, frameLen, downMatrix, upMatrix, output)
+		return output
+
+	case FormatInt32: // FAAD_FMT_32BIT
+		output := make([]int32, totalSamples)
+		ToPCM32Bit(input, channelMap, channels, frameLen, downMatrix, upMatrix, output)
+		return output
+
+	case FormatFloat32: // FAAD_FMT_FLOAT
+		output := make([]float32, totalSamples)
+		ToPCMFloat(input, channelMap, channels, frameLen, downMatrix, upMatrix, output)
+		return output
+
+	case FormatFloat64: // FAAD_FMT_DOUBLE
+		output := make([]float64, totalSamples)
+		ToPCMDouble(input, channelMap, channels, frameLen, downMatrix, upMatrix, output)
+		return output
+
+	default:
+		// Default to 16-bit
+		output := make([]int16, totalSamples)
+		ToPCM16Bit(input, channelMap, channels, frameLen, downMatrix, upMatrix, output)
+		return output
+	}
+}
