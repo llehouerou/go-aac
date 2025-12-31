@@ -48,12 +48,20 @@ func validateFilterBankFrame(t *testing.T, testDir string) {
 		t.Skipf("skipping: %v", err)
 		return
 	}
+	if len(freqInData)%4 != 0 {
+		t.Skipf("freq_in.bin size %d is not divisible by 4", len(freqInData))
+		return
+	}
 
 	// Load expected output
 	timeOutPath := filepath.Join(testDir, "time_out.bin")
 	expectedData, err := os.ReadFile(timeOutPath)
 	if err != nil {
 		t.Skipf("skipping: %v", err)
+		return
+	}
+	if len(expectedData)%4 != 0 {
+		t.Skipf("time_out.bin size %d is not divisible by 4", len(expectedData))
 		return
 	}
 
@@ -100,10 +108,7 @@ func validateFilterBankFrame(t *testing.T, testDir string) {
 	const tolerance = 1e-5
 	errorCount := 0
 	for i := 0; i < len(expected); i++ {
-		diff := timeOut[i] - expected[i]
-		if diff < 0 {
-			diff = -diff
-		}
+		diff := math.Abs(float64(timeOut[i] - expected[i]))
 		if diff > tolerance {
 			t.Errorf("sample %d: got %f, expected %f (diff %f)", i, timeOut[i], expected[i], diff)
 			errorCount++
