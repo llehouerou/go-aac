@@ -83,3 +83,94 @@ func TestDownmixerConfig(t *testing.T) {
 		t.Errorf("LFEGain: got %v, want 0.5", dm.LFEGain)
 	}
 }
+
+func TestDownmix5_1ToStereo(t *testing.T) {
+	// 5.1 input: C=0, L=1, R=2, Ls=3, Rs=4, LFE=5
+	// Single sample per channel
+	input := [][]float32{
+		{1000.0}, // Center
+		{500.0},  // Front Left
+		{600.0},  // Front Right
+		{200.0},  // Rear Left (surround)
+		{300.0},  // Rear Right (surround)
+		{100.0},  // LFE (ignored by default)
+	}
+	channelMap := []uint8{0, 1, 2, 3, 4, 5}
+
+	dm := NewDownmixer()
+
+	// Left output = DM_MUL * (L + C*InvSqrt2 + Ls*InvSqrt2)
+	// = 0.3204 * (500 + 1000*0.7071 + 200*0.7071)
+	// = 0.3204 * (500 + 707.1 + 141.4)
+	// = 0.3204 * 1348.5 ≈ 432.1
+	left, right := dm.Downmix5_1ToStereo(input, channelMap, 0)
+
+	expectedL := DownmixMul * (input[1][0] + input[0][0]*InvSqrt2 + input[3][0]*InvSqrt2)
+	expectedR := DownmixMul * (input[2][0] + input[0][0]*InvSqrt2 + input[4][0]*InvSqrt2)
+
+	if math.Abs(float64(left-expectedL)) > 0.01 {
+		t.Errorf("left: got %v, want %v", left, expectedL)
+	}
+	if math.Abs(float64(right-expectedR)) > 0.01 {
+		t.Errorf("right: got %v, want %v", right, expectedR)
+	}
+}
+
+func TestDownmix5_1ToStereo_WithLFE(t *testing.T) {
+	input := [][]float32{
+		{1000.0}, // Center
+		{500.0},  // Front Left
+		{600.0},  // Front Right
+		{200.0},  // Rear Left
+		{300.0},  // Rear Right
+		{400.0},  // LFE
+	}
+	channelMap := []uint8{0, 1, 2, 3, 4, 5}
+
+	dm := &Downmixer{
+		Enabled:    true,
+		IncludeLFE: true,
+		LFEGain:    0.5,
+	}
+
+	left, right := dm.Downmix5_1ToStereo(input, channelMap, 0)
+
+	// Base downmix plus LFE contribution
+	baseL := DownmixMul * (input[1][0] + input[0][0]*InvSqrt2 + input[3][0]*InvSqrt2)
+	baseR := DownmixMul * (input[2][0] + input[0][0]*InvSqrt2 + input[4][0]*InvSqrt2)
+	lfeContrib := input[5][0] * dm.LFEGain * DownmixMul
+
+	expectedL := baseL + lfeContrib
+	expectedR := baseR + lfeContrib
+
+	if math.Abs(float64(left-expectedL)) > 0.01 {
+		t.Errorf("left with LFE: got %v, want %v", left, expectedL)
+	}
+	if math.Abs(float64(right-expectedR)) > 0.01 {
+		t.Errorf("right with LFE: got %v, want %v", right, expectedR)
+	}
+}
+
+func TestDownmix5_1ToStereo_Disabled(t *testing.T) {
+	input := [][]float32{
+		{1000.0}, // Center
+		{500.0},  // Front Left
+		{600.0},  // Front Right
+		{200.0},  // Rear Left
+		{300.0},  // Rear Right
+		{100.0},  // LFE
+	}
+	channelMap := []uint8{0, 1, 2, 3, 4, 5}
+
+	dm := &Downmixer{Enabled: false}
+
+	// When disabled, returns front L/R directly
+	left, right := dm.Downmix5_1ToStereo(input, channelMap, 0)
+
+	if left != 500.0 {
+		t.Errorf("disabled left: got %v, want 500.0", left)
+	}
+	if right != 600.0 {
+		t.Errorf("disabled right: got %v, want 600.0", right)
+	}
+}

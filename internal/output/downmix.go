@@ -62,3 +62,43 @@ func NewDownmixer() *Downmixer {
 		LFEGain:    0.0,
 	}
 }
+
+// Downmix5_1ToStereo converts a 5.1 channel sample to stereo.
+//
+// The channel map specifies which input channels correspond to which positions:
+// channelMap[0]=Center, [1]=FrontLeft, [2]=FrontRight, [3]=RearLeft, [4]=RearRight, [5]=LFE
+//
+// Formula (ITU-R BS.775-1):
+//
+//	L = DM_MUL * (L + C*InvSqrt2 + Ls*InvSqrt2)
+//	R = DM_MUL * (R + C*InvSqrt2 + Rs*InvSqrt2)
+//
+// Ported from: get_sample in ~/dev/faad2/libfaad/output.c:45-61
+func (d *Downmixer) Downmix5_1ToStereo(input [][]float32, channelMap []uint8, sampleIdx uint16) (left, right float32) {
+	if !d.Enabled {
+		// Pass through front L/R when disabled
+		return input[channelMap[ChannelFrontLeft]][sampleIdx],
+			input[channelMap[ChannelFrontRight]][sampleIdx]
+	}
+
+	// Get channel samples using the channel map
+	center := input[channelMap[ChannelCenter]][sampleIdx]
+	frontL := input[channelMap[ChannelFrontLeft]][sampleIdx]
+	frontR := input[channelMap[ChannelFrontRight]][sampleIdx]
+	rearL := input[channelMap[ChannelRearLeft]][sampleIdx]
+	rearR := input[channelMap[ChannelRearRight]][sampleIdx]
+
+	// Apply ITU-R BS.775-1 downmix matrix
+	left = DownmixMul * (frontL + center*InvSqrt2 + rearL*InvSqrt2)
+	right = DownmixMul * (frontR + center*InvSqrt2 + rearR*InvSqrt2)
+
+	// Optionally mix in LFE
+	if d.IncludeLFE && len(channelMap) > int(ChannelLFE) {
+		lfe := input[channelMap[ChannelLFE]][sampleIdx]
+		lfeContrib := lfe * d.LFEGain * DownmixMul
+		left += lfeContrib
+		right += lfeContrib
+	}
+
+	return left, right
+}
