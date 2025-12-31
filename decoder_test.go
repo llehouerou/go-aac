@@ -34,3 +34,23 @@ func TestDecoder_New(t *testing.T) {
 		t.Errorf("rngState2: got 0x%x, want 0x206155b7", dec.rngState2)
 	}
 }
+
+func TestDecoder_Constants_MatchFAAD2(t *testing.T) {
+	// Verify constants match FAAD2's structs.h:43-44 definitions
+	tests := []struct {
+		name string
+		got  int
+		want int
+	}{
+		{"maxChannels", maxChannels, 64},
+		{"maxSyntaxElements", maxSyntaxElements, 48},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Errorf("%s: got %d, want %d", tt.name, tt.got, tt.want)
+			}
+		})
+	}
+}
