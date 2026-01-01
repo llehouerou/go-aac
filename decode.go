@@ -663,6 +663,33 @@ func (d *Decoder) createChannelConfig(info *FrameInfo) {
 	}
 }
 
+// DecodeFloat decodes one AAC frame and returns float32 PCM samples.
+// This is a convenience wrapper around Decode() with float output format.
+//
+// Ported from: NeAACDecDecode() with FAAD_FMT_FLOAT
+func (d *Decoder) DecodeFloat(buffer []byte) ([]float32, *FrameInfo, error) {
+	// Temporarily set output format to float
+	originalFormat := d.config.OutputFormat
+	d.config.OutputFormat = OutputFormatFloat
+
+	samples, info, err := d.Decode(buffer)
+
+	// Restore original format
+	d.config.OutputFormat = originalFormat
+
+	if err != nil || samples == nil {
+		return nil, info, err
+	}
+
+	floatSamples, ok := samples.([]float32)
+	if !ok {
+		// If Decode returned different type, return nil
+		return nil, info, nil
+	}
+
+	return floatSamples, info, nil
+}
+
 // applyFilterBank applies the inverse filter bank (IMDCT + windowing + overlap-add).
 //
 // Parameters:

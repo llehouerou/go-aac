@@ -330,3 +330,28 @@ func TestDecoder_Decode_CompletePipeline_Integrated(t *testing.T) {
 		t.Errorf("frame counter: got %d, want 1", d.frame)
 	}
 }
+
+func TestDecoder_DecodeFloat(t *testing.T) {
+	d := NewDecoder()
+	d.adtsHeaderPresent = false
+	d.sfIndex = 4              // 44100 Hz
+	d.objectType = 2           // LC
+	d.channelConfiguration = 2 // stereo
+	d.frameLength = 1024
+	d.config.OutputFormat = OutputFormat16Bit // Original format
+
+	// ID_END only
+	rawData := []byte{0xE0}
+	_, info, err := d.DecodeFloat(rawData)
+	if err != nil {
+		t.Fatalf("DecodeFloat failed: %v", err)
+	}
+	if info == nil {
+		t.Fatal("expected non-nil info")
+	}
+
+	// Verify original format is preserved
+	if d.config.OutputFormat != OutputFormat16Bit {
+		t.Error("OutputFormat should be restored after DecodeFloat")
+	}
+}
