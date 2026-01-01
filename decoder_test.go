@@ -280,3 +280,19 @@ func TestDecoder_PostSeekReset(t *testing.T) {
 		t.Errorf("frame changed with -1: got %d, want 100", dec.frame)
 	}
 }
+
+func TestInitResult_Fields(t *testing.T) {
+	// Verify InitResult type exists with expected fields
+	result := InitResult{
+		SampleRate: 44100,
+		Channels:   2,
+		BytesRead:  0,
+	}
+
+	if result.SampleRate != 44100 {
+		t.Errorf("SampleRate: got %d, want 44100", result.SampleRate)
+	}
+	if result.Channels != 2 {
+		t.Errorf("Channels: got %d, want 2", result.Channels)
+	}
+}

@@ -205,6 +205,16 @@ func (d *Decoder) PostSeekReset(frame int64) {
 	}
 }
 
+// InitResult contains the result of decoder initialization.
+// Returned by Init() and Init2() methods.
+//
+// Ported from: return values of NeAACDecInit/NeAACDecInit2 in decoder.c
+type InitResult struct {
+	SampleRate uint32 // Output sample rate in Hz
+	Channels   uint8  // Number of output channels
+	BytesRead  uint32 // Bytes consumed during init (ADIF only, 0 for ADTS/raw)
+}
+
 // Close releases decoder resources.
 // The decoder should not be used after calling Close.
 //
