@@ -82,3 +82,19 @@ func TestErrNone(t *testing.T) {
 		t.Error("ErrNone.Error() should be 'No error'")
 	}
 }
+
+func TestInitErrors(t *testing.T) {
+	errors := []Error{
+		ErrNilDecoder,
+		ErrNilBuffer,
+		ErrBufferTooSmall,
+		ErrUnsupportedObjectType,
+		ErrInvalidSampleRate,
+	}
+
+	for _, e := range errors {
+		if e.Error() == "" {
+			t.Errorf("Error %d has empty message", e)
+		}
+	}
+}

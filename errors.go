@@ -41,51 +41,65 @@ const (
 	ErrPCENotFirst               Error = 31
 	ErrBitstreamValueNotAllowed  Error = 32
 	ErrMAINPredictionNotInit     Error = 33
+
+	// Initialization errors.
+	// Ported from: decoder.c:276-278, 405-412
+	ErrNilDecoder            Error = 35 // nil decoder handle
+	ErrNilBuffer             Error = 36 // nil buffer passed to Init
+	ErrBufferTooSmall        Error = 37 // buffer too small (< 2 bytes)
+	ErrUnsupportedObjectType Error = 38 // unsupported audio object type
+	ErrInvalidSampleRate     Error = 39 // invalid sample rate (0)
 )
 
 // errMessages contains error messages matching FAAD2 exactly.
 // Source: ~/dev/faad2/libfaad/error.c:34-69
-var errMessages = [34]string{
-	"No error",
-	"Gain control not yet implemented",
-	"Pulse coding not allowed in short blocks",
-	"Invalid huffman codebook",
-	"Scalefactor out of range",
-	"Unable to find ADTS syncword",
-	"Channel coupling not yet implemented",
-	"Channel configuration not allowed in error resilient frame",
-	"Bit error in error resilient scalefactor decoding",
-	"Error decoding huffman scalefactor (bitstream error)",
-	"Error decoding huffman codeword (bitstream error)",
-	"Non existent huffman codebook number found",
-	"Invalid number of channels",
-	"Maximum number of bitstream elements exceeded",
-	"Input data buffer too small",
-	"Array index out of range",
-	"Maximum number of scalefactor bands exceeded",
-	"Quantised value out of range",
-	"LTP lag out of range",
-	"Invalid SBR parameter decoded",
-	"SBR called without being initialised",
-	"Unexpected channel configuration change",
-	"Error in program_config_element",
-	"First SBR frame is not the same as first AAC frame",
-	"Unexpected fill element with SBR data",
-	"Not all elements were provided with SBR data",
-	"LTP decoding not available",
-	"Output data buffer too small",
-	"CRC error in DRM data",
-	"PNS not allowed in DRM data stream",
-	"No standard extension payload allowed in DRM",
-	"PCE shall be the first element in a frame",
-	"Bitstream value not allowed by specification",
-	"MAIN prediction not initialised",
+var errMessages = map[Error]string{
+	0:  "No error",
+	1:  "Gain control not yet implemented",
+	2:  "Pulse coding not allowed in short blocks",
+	3:  "Invalid huffman codebook",
+	4:  "Scalefactor out of range",
+	5:  "Unable to find ADTS syncword",
+	6:  "Channel coupling not yet implemented",
+	7:  "Channel configuration not allowed in error resilient frame",
+	8:  "Bit error in error resilient scalefactor decoding",
+	9:  "Error decoding huffman scalefactor (bitstream error)",
+	10: "Error decoding huffman codeword (bitstream error)",
+	11: "Non existent huffman codebook number found",
+	12: "Invalid number of channels",
+	13: "Maximum number of bitstream elements exceeded",
+	14: "Input data buffer too small",
+	15: "Array index out of range",
+	16: "Maximum number of scalefactor bands exceeded",
+	17: "Quantised value out of range",
+	18: "LTP lag out of range",
+	19: "Invalid SBR parameter decoded",
+	20: "SBR called without being initialised",
+	21: "Unexpected channel configuration change",
+	22: "Error in program_config_element",
+	23: "First SBR frame is not the same as first AAC frame",
+	24: "Unexpected fill element with SBR data",
+	25: "Not all elements were provided with SBR data",
+	26: "LTP decoding not available",
+	27: "Output data buffer too small",
+	28: "CRC error in DRM data",
+	29: "PNS not allowed in DRM data stream",
+	30: "No standard extension payload allowed in DRM",
+	31: "PCE shall be the first element in a frame",
+	32: "Bitstream value not allowed by specification",
+	33: "MAIN prediction not initialised",
+	// Initialization errors (go-aac specific, not from FAAD2 error.c)
+	35: "nil decoder handle",
+	36: "nil buffer passed to Init",
+	37: "buffer too small",
+	38: "unsupported audio object type",
+	39: "invalid sample rate",
 }
 
 // Error implements the error interface.
 func (e Error) Error() string {
-	if e >= 0 && int(e) < len(errMessages) {
-		return errMessages[e]
+	if msg, ok := errMessages[e]; ok {
+		return msg
 	}
 	return "unknown error"
 }
