@@ -2,6 +2,8 @@
 package aac
 
 import (
+	"fmt"
+
 	"github.com/llehouerou/go-aac/internal/bits"
 )
 
@@ -293,9 +295,27 @@ func (d *Decoder) parseRawDataBlock(r *bits.Reader) (*rawDataBlockResult, error)
 			return nil, ErrMaxBitstreamElements
 
 		case idCPE:
-			// TODO: Parse Channel Pair Element
-			// For now, return error - not yet implemented
-			return nil, ErrMaxBitstreamElements
+			// Channel Pair Element (stereo)
+			// Ported from: channel_pair_element() in ~/dev/faad2/libfaad/syntax.c:698-796
+			//
+			// CPE contains:
+			// - element_instance_tag (4 bits)
+			// - common_window flag (1 bit)
+			// - if common_window: ics_info() and ms_mask
+			// - individual_channel_stream() for each channel
+			// - spectral_data() for each channel
+			//
+			// After parsing, reconstruct_channel_pair() is called.
+
+			// Increment channel count (CPE = 2 channels)
+			result.numChannels += 2
+
+			// Skip element_instance_tag for now (4 bits)
+			// TODO: Parse full CPE with individual_channel_stream for both channels
+			_ = r.GetBits(4) // element_instance_tag
+
+			// For now, return error - full ICS parsing not yet implemented
+			return nil, fmt.Errorf("CPE parsing not yet implemented")
 
 		case idLFE:
 			// TODO: Parse LFE Channel Element
@@ -357,6 +377,24 @@ type sceParseResult struct {
 	SpecData []int16
 }
 
+// cpeParseResult holds parsed data from a Channel Pair Element.
+// Ported from: channel_pair_element() in ~/dev/faad2/libfaad/syntax.c:698-796
+//
+//nolint:unused // Infrastructure for future CPE decoding
+type cpeParseResult struct {
+	ElementInstanceTag uint8   // element_instance_tag (4 bits)
+	CommonWindow       bool    // common_window flag
+	Channel1           uint8   // first channel index
+	Channel2           uint8   // second channel index
+	WindowSequence1    uint8   // window sequence for channel 1
+	WindowShape1       uint8   // window shape for channel 1
+	WindowSequence2    uint8   // window sequence for channel 2
+	WindowShape2       uint8   // window shape for channel 2
+	MSMaskPresent      uint8   // ms_mask_present (0=off, 1=some, 2=all)
+	SpecData1          []int16 // quantized spectral coefficients channel 1
+	SpecData2          []int16 // quantized spectral coefficients channel 2
+}
+
 // reconstructSCE performs spectral reconstruction for a single channel element.
 // This method will be called after SCE parsing is implemented.
 //
@@ -404,6 +442,51 @@ func (d *Decoder) reconstructSCE(sce *sceParseResult, channel uint8) error {
 	// Save window shape for next frame
 	// Ported from: specrec.c:1055
 	d.windowShapePrev[channel] = sce.WindowShape
+
+	return nil
+}
+
+// reconstructCPE performs spectral reconstruction for a channel pair element.
+// This method will be called after CPE parsing is implemented.
+//
+// The reconstruction pipeline is:
+// 1. Dequantize spectral coefficients (apply_scalefactors + quant_to_spec)
+// 2. Apply M/S stereo decoding if enabled
+// 3. Apply Intensity Stereo if enabled
+// 4. Apply PNS (Perceptual Noise Substitution) if enabled
+// 5. Apply TNS (Temporal Noise Shaping) if enabled
+// 6. Apply filterbank (IMDCT + windowing + overlap-add)
+//
+// Ported from: reconstruct_channel_pair() in ~/dev/faad2/libfaad/specrec.c:1131-1323
+//
+//nolint:unused // Infrastructure for future CPE decoding
+func (d *Decoder) reconstructCPE(cpe *cpeParseResult, channelBase uint8) error {
+	// Verify both channels are valid
+	if channelBase+1 >= maxChannels {
+		return ErrInvalidNumChannels
+	}
+
+	// Verify buffers are allocated for both channels
+	// Security: Matches FAAD2 checks for CVE-2018-20199, CVE-2018-20360
+	for ch := uint8(0); ch < 2; ch++ {
+		idx := channelBase + ch
+		if d.timeOut[idx] == nil {
+			return ErrArrayIndexOutOfRange
+		}
+		if d.fbIntermed[idx] == nil {
+			return ErrArrayIndexOutOfRange
+		}
+	}
+
+	// TODO: When spectrum package is connected (via factory pattern like filterbank):
+	// 1. spectrum.ReconstructChannelPair(specData1, specData2, ...)
+	// 2. filterbank.IFilterBank() for each channel
+	// 3. Update LTP state if Main profile
+
+	// Update window shapes for next frame
+	// Ported from: specrec.c:1312-1313
+	d.windowShapePrev[channelBase] = cpe.WindowShape1
+	d.windowShapePrev[channelBase+1] = cpe.WindowShape2
 
 	return nil
 }
