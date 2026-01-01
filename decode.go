@@ -67,7 +67,37 @@ func (d *Decoder) Decode(buffer []byte) (interface{}, *FrameInfo, error) {
 		info.HeaderType = HeaderTypeRAW
 	}
 
-	// TODO: Continue with raw_data_block parsing
+	// Parse raw_data_block
+	// Ported from: decoder.c:990
+	rdbResult, err := d.parseRawDataBlock(r)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Update frame state
+	d.frChannels = rdbResult.numChannels
+	d.frChEle = rdbResult.numElements
+
+	// Calculate bytes consumed
+	// Ported from: decoder.c:1022-1023
+	bitsConsumed := r.GetProcessedBits()
+	info.BytesConsumed = (bitsConsumed + 7) / 8
+
+	// Validate channel count
+	// Ported from: decoder.c:1014-1019
+	if rdbResult.numChannels == 0 || rdbResult.numChannels > 64 {
+		if rdbResult.numChannels > 64 {
+			return nil, nil, ErrInvalidNumChannels
+		}
+		// Zero channels means empty frame (only ID_END)
+		d.frame++
+		info.Channels = 0
+		return nil, info, nil
+	}
+
+	// TODO: Continue with spectral reconstruction
+	info.Channels = rdbResult.numChannels
+	d.frame++
 	return nil, info, nil
 }
 
@@ -144,4 +174,111 @@ func parseADTSFrameHeader(r *bits.Reader, oldFormat bool) (*adtsFrameHeader, err
 		r.FlushBits(8)
 	}
 	return nil, ErrADTSSyncwordNotFound
+}
+
+// elementID represents a syntax element identifier.
+// Local version to avoid import cycles.
+// Source: ~/dev/faad2/libfaad/syntax.h:85-94
+type elementID uint8
+
+// Syntax Element IDs.
+const (
+	idSCE            elementID = 0x0 // Single Channel Element
+	idCPE            elementID = 0x1 // Channel Pair Element
+	idCCE            elementID = 0x2 // Coupling Channel Element
+	idLFE            elementID = 0x3 // LFE Channel Element
+	idDSE            elementID = 0x4 // Data Stream Element
+	idPCE            elementID = 0x5 // Program Config Element
+	idFIL            elementID = 0x6 // Fill Element
+	idEND            elementID = 0x7 // Terminating Element
+	lenSEID          uint      = 3   // Syntax element identifier length in bits
+	invalidElementID elementID = 255
+)
+
+// rawDataBlockResult holds the result of parsing a raw data block.
+// Local version to avoid import cycles.
+// Ported from: raw_data_block() local variables in ~/dev/faad2/libfaad/syntax.c:452-458
+type rawDataBlockResult struct {
+	numChannels  uint8     // Total channels in this frame (fr_channels)
+	numElements  uint8     // Number of elements parsed (fr_ch_ele)
+	firstElement elementID // First syntax element type (first_syn_ele)
+	hasLFE       bool      // True if LFE element present (has_lfe)
+}
+
+// parseRawDataBlock parses a raw_data_block() from the bitstream.
+// This is the main entry point for parsing AAC frame data.
+// Local version to avoid import cycles with the syntax package.
+//
+// The function reads syntax elements in a loop until ID_END (0x7) is
+// encountered. Currently, only ID_END is handled; other element types
+// will be added as the decoder implementation progresses.
+//
+// Ported from: raw_data_block() in ~/dev/faad2/libfaad/syntax.c:449-648
+func (d *Decoder) parseRawDataBlock(r *bits.Reader) (*rawDataBlockResult, error) {
+	result := &rawDataBlockResult{
+		firstElement: invalidElementID,
+	}
+
+	// Main parsing loop
+	// Ported from: syntax.c:465-544
+	for {
+		// Read element ID (3 bits)
+		idSynEle := elementID(r.GetBits(lenSEID))
+
+		if idSynEle == idEND {
+			break
+		}
+
+		// Track elements
+		result.numElements++
+		if result.firstElement == invalidElementID {
+			result.firstElement = idSynEle
+		}
+
+		switch idSynEle {
+		case idSCE:
+			// TODO: Parse Single Channel Element
+			// For now, return error - not yet implemented
+			return nil, ErrMaxBitstreamElements
+
+		case idCPE:
+			// TODO: Parse Channel Pair Element
+			// For now, return error - not yet implemented
+			return nil, ErrMaxBitstreamElements
+
+		case idLFE:
+			// TODO: Parse LFE Channel Element
+			result.hasLFE = true
+			return nil, ErrMaxBitstreamElements
+
+		case idCCE:
+			// TODO: Parse Coupling Channel Element
+			return nil, ErrChannelCouplingNotImpl
+
+		case idDSE:
+			// TODO: Parse Data Stream Element
+			return nil, ErrMaxBitstreamElements
+
+		case idPCE:
+			// PCE must be first element
+			if result.numElements != 1 {
+				return nil, ErrPCENotFirst
+			}
+			// TODO: Parse Program Config Element
+			return nil, ErrProgramConfigElement
+
+		case idFIL:
+			// TODO: Parse Fill Element
+			return nil, ErrMaxBitstreamElements
+
+		default:
+			return nil, ErrMaxBitstreamElements
+		}
+	}
+
+	// Byte align after parsing
+	// Ported from: syntax.c:644
+	r.ByteAlign()
+
+	return result, nil
 }
