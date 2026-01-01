@@ -42,6 +42,13 @@ const (
 // Decoder is the main AAC decoder.
 // It maintains all state needed for decoding an AAC stream.
 //
+// Thread Safety:
+//   - A Decoder instance is NOT safe for concurrent use from multiple goroutines.
+//   - Each goroutine should have its own Decoder instance.
+//   - Read-only methods (SampleRate, Channels, FrameLength, ObjectType) are safe
+//     to call concurrently after Init() completes.
+//   - Decode methods modify internal state and must not be called concurrently.
+//
 // Ported from: NeAACDecStruct in ~/dev/faad2/libfaad/structs.h:332-439
 //
 //nolint:unused // Fields are used incrementally as decoder features are implemented

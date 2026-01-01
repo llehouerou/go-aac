@@ -821,3 +821,35 @@ func TestDecoder_SimpleInit2(t *testing.T) {
 		t.Errorf("channels: got %d, want 2", channels)
 	}
 }
+
+func TestDecoder_ConcurrentDecode(t *testing.T) {
+	d := NewDecoder()
+
+	// Initialize
+	adtsHeader := []byte{
+		0xFF, 0xF1, 0x50, 0x80, 0x00, 0x1F, 0xFC,
+	}
+	_, err := d.Init(adtsHeader)
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Run multiple goroutines accessing decoder concurrently
+	// This tests for race conditions (use -race flag)
+	done := make(chan bool)
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer func() { done <- true }()
+			// These should not panic or race
+			_ = d.SampleRate()
+			_ = d.Channels()
+			_ = d.FrameLength()
+			_ = d.ObjectType()
+		}()
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+}
