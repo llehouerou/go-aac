@@ -379,3 +379,22 @@ func TestDecoder_DecodeInt16_ReturnsInt16Slice(t *testing.T) {
 	_ = samples
 	_ = err
 }
+
+func TestDecoder_DecodeFloat32_ReturnsFloat32Slice(t *testing.T) {
+	d := NewDecoder()
+
+	// Initialize with valid ADTS header
+	adtsHeader := []byte{
+		0xFF, 0xF1, 0x50, 0x80, 0x00, 0x1F, 0xFC,
+	}
+	_, err := d.Init(adtsHeader)
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// DecodeFloat32 should match the simplified signature: ([]float32, error)
+	samples, err := d.DecodeFloat32(adtsHeader)
+	_ = samples
+	_ = err
+	// Method exists with correct signature - that's what we're testing
+}

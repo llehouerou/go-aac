@@ -721,6 +721,24 @@ func (d *Decoder) DecodeFloat(buffer []byte) ([]float32, *FrameInfo, error) {
 	return floatSamples, info, nil
 }
 
+// DecodeFloat32 decodes one AAC frame and returns float32 PCM samples.
+// This is a convenience wrapper matching the simplified API from MIGRATION_STEPS.md.
+//
+// For detailed frame information, use DecodeFloat() which returns *FrameInfo.
+func (d *Decoder) DecodeFloat32(frame []byte) ([]float32, error) {
+	samples, info, err := d.DecodeFloat(frame)
+	if err != nil {
+		return nil, err
+	}
+
+	// No samples (first frame or empty)
+	if info == nil || info.Samples == 0 {
+		return nil, nil
+	}
+
+	return samples, nil
+}
+
 // applyFilterBank applies the inverse filter bank (IMDCT + windowing + overlap-add).
 //
 // Parameters:
