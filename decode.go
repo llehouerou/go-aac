@@ -663,6 +663,37 @@ func (d *Decoder) createChannelConfig(info *FrameInfo) {
 	}
 }
 
+// DecodeInt16 decodes one AAC frame and returns int16 PCM samples.
+// This is a convenience wrapper that returns only samples and error,
+// matching the simplified API from MIGRATION_STEPS.md Step 7.4.
+//
+// For detailed frame information (channels, sample rate, bytes consumed),
+// use Decode() which returns *FrameInfo.
+//
+// The first frame returns nil samples due to the overlap-add delay.
+// This matches FAAD2 behavior.
+func (d *Decoder) DecodeInt16(frame []byte) ([]int16, error) {
+	samples, info, err := d.Decode(frame)
+	if err != nil {
+		return nil, err
+	}
+
+	// No samples (first frame or empty)
+	if info == nil || info.Samples == 0 {
+		return nil, nil
+	}
+
+	// Type assert to []int16
+	int16Samples, ok := samples.([]int16)
+	if !ok {
+		// For non-16bit output formats, return nil
+		// Users should use Decode() directly for other formats
+		return nil, nil
+	}
+
+	return int16Samples, nil
+}
+
 // DecodeFloat decodes one AAC frame and returns float32 PCM samples.
 // This is a convenience wrapper around Decode() with float output format.
 //

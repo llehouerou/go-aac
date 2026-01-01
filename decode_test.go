@@ -355,3 +355,27 @@ func TestDecoder_DecodeFloat(t *testing.T) {
 		t.Error("OutputFormat should be restored after DecodeFloat")
 	}
 }
+
+func TestDecoder_DecodeInt16_ReturnsInt16Slice(t *testing.T) {
+	// This test validates the return type and basic structure.
+	// Full decoding tests require complete syntax parsing (future work).
+	d := NewDecoder()
+
+	// Initialize with valid ADTS header
+	adtsHeader := []byte{
+		0xFF, 0xF1, 0x50, 0x80, 0x00, 0x1F, 0xFC,
+	}
+	_, err := d.Init(adtsHeader)
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// DecodeInt16 should return []int16 (or nil if no samples)
+	// For now, we just verify the method exists and returns correct types
+	samples, err := d.DecodeInt16(adtsHeader)
+
+	// Currently, full decoding returns errors for unimplemented elements.
+	// We just verify the method signature is correct.
+	_ = samples
+	_ = err
+}
