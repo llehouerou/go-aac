@@ -728,3 +728,58 @@ func TestDecoder_Init2_SampleRates(t *testing.T) {
 		})
 	}
 }
+
+func TestDecoder_Init_MultipleCalls(t *testing.T) {
+	// Ensure Init can be called multiple times (reinitializing)
+	d := NewDecoder()
+
+	adts1 := []byte{0xFF, 0xF1, 0x50, 0x80, 0x00, 0x1F, 0xFC} // 44100 stereo
+	result1, err := d.Init(adts1)
+	if err != nil {
+		t.Fatalf("first Init failed: %v", err)
+	}
+
+	// Different config: 48000 Hz (sf_index=3 instead of 4)
+	adts2 := []byte{0xFF, 0xF1, 0x4C, 0x80, 0x00, 0x1F, 0xFC} // 48000 stereo
+	result2, err := d.Init(adts2)
+	if err != nil {
+		t.Fatalf("second Init failed: %v", err)
+	}
+
+	if result1.SampleRate == result2.SampleRate {
+		t.Error("expected different sample rates after reinit")
+	}
+	if result1.SampleRate != 44100 {
+		t.Errorf("first Init: expected 44100, got %d", result1.SampleRate)
+	}
+	if result2.SampleRate != 48000 {
+		t.Errorf("second Init: expected 48000, got %d", result2.SampleRate)
+	}
+}
+
+func TestDecoder_Init2_MultipleCalls(t *testing.T) {
+	d := NewDecoder()
+
+	// First: AAC-LC 44100Hz stereo (objectType=2, sfIndex=4, channels=2)
+	// Binary: 00010 0100 0010 000 = 0x12 0x10
+	asc1 := []byte{0x12, 0x10}
+	result1, err := d.Init2(asc1)
+	if err != nil {
+		t.Fatalf("first Init2 failed: %v", err)
+	}
+
+	// Second: AAC-LC 48000Hz stereo (objectType=2, sfIndex=3, channels=2)
+	// Binary: 00010 0011 0010 000 = 0x11 0x90
+	asc2 := []byte{0x11, 0x90}
+	result2, err := d.Init2(asc2)
+	if err != nil {
+		t.Fatalf("second Init2 failed: %v", err)
+	}
+
+	if result1.SampleRate != 44100 {
+		t.Errorf("first Init2: expected 44100, got %d", result1.SampleRate)
+	}
+	if result2.SampleRate != 48000 {
+		t.Errorf("second Init2: expected 48000, got %d", result2.SampleRate)
+	}
+}
