@@ -265,8 +265,31 @@ func (d *Decoder) parseRawDataBlock(r *bits.Reader) (*rawDataBlockResult, error)
 
 		switch idSynEle {
 		case idSCE:
-			// TODO: Parse Single Channel Element
-			// For now, return error - not yet implemented
+			// Single Channel Element
+			// Ported from: single_lfe_channel_element() in ~/dev/faad2/libfaad/syntax.c:652-696
+			//
+			// SCE contains:
+			// - element_instance_tag (4 bits)
+			// - individual_channel_stream() which includes:
+			//   - ics_info()
+			//   - section_data()
+			//   - scale_factor_data()
+			//   - pulse_data() (optional)
+			//   - tns_data() (optional)
+			//   - gain_control_data() (optional, SSR only)
+			//   - spectral_data()
+			//
+			// After parsing, reconstruct_single_channel() is called.
+
+			// Increment channel count (SCE = 1 channel)
+			result.numChannels++
+
+			// Skip element_instance_tag for now (4 bits)
+			// TODO: Parse full SCE with individual_channel_stream
+			_ = r.GetBits(4) // element_instance_tag
+
+			// For now, return error - full ICS parsing not yet implemented
+			// This requires huffman decoding and spectral data parsing
 			return nil, ErrMaxBitstreamElements
 
 		case idCPE:
@@ -309,4 +332,78 @@ func (d *Decoder) parseRawDataBlock(r *bits.Reader) (*rawDataBlockResult, error)
 	r.ByteAlign()
 
 	return result, nil
+}
+
+// sceParseResult holds the parsed data from a Single Channel Element.
+// This structure will be populated when full SCE parsing is implemented.
+//
+// Ported from: single_lfe_channel_element() local variables in ~/dev/faad2/libfaad/syntax.c:652-666
+//
+//nolint:unused // Infrastructure for future SCE decoding
+type sceParseResult struct {
+	// ElementInstanceTag is the element instance tag (4 bits)
+	ElementInstanceTag uint8
+
+	// Channel is the channel index for this element
+	Channel uint8
+
+	// WindowSequence is the window sequence type
+	WindowSequence uint8
+
+	// WindowShape is the window shape for this frame
+	WindowShape uint8
+
+	// SpecData holds the quantized spectral coefficients (1024 values)
+	SpecData []int16
+}
+
+// reconstructSCE performs spectral reconstruction for a single channel element.
+// This method will be called after SCE parsing is implemented.
+//
+// The reconstruction pipeline includes:
+// 1. Inverse quantization (|x|^(4/3))
+// 2. Scale factor application
+// 3. PNS decode (noise substitution)
+// 4. IC Prediction (MAIN profile)
+// 5. LTP prediction (LTP profile)
+// 6. TNS decode (temporal noise shaping)
+// 7. Filter bank (IMDCT)
+//
+// Parameters:
+//   - sce: Parsed SCE data including spectral coefficients
+//   - channel: Channel index for output buffer
+//
+// Ported from: reconstruct_single_channel() in ~/dev/faad2/libfaad/specrec.c:905-1129
+//
+//nolint:unused // Infrastructure for future SCE decoding
+func (d *Decoder) reconstructSCE(sce *sceParseResult, channel uint8) error {
+	// Verify channel is valid
+	// Ported from: specrec.c:960-962
+	if channel >= maxChannels {
+		return ErrInvalidNumChannels
+	}
+
+	// Verify buffer is allocated
+	// Ported from: specrec.c:961-966 (sanity check for CVE-2018-20199, CVE-2018-20360)
+	if d.timeOut[channel] == nil {
+		return ErrArrayIndexOutOfRange
+	}
+	if d.fbIntermed[channel] == nil {
+		return ErrArrayIndexOutOfRange
+	}
+
+	// TODO: Call spectrum.ReconstructSingleChannel when syntax parsing is complete.
+	// The import cycle between aac and spectrum packages needs to be resolved first.
+	// For now, just update window shape state for the frame.
+	//
+	// The full pipeline will be:
+	// 1. spectrum.ReconstructSingleChannel(quantData, specData, cfg)
+	// 2. filterbank.IFilterBank(..., specData, timeOut, fbIntermed, ...)
+	// 3. LTP state update (if LTP profile)
+
+	// Save window shape for next frame
+	// Ported from: specrec.c:1055
+	d.windowShapePrev[channel] = sce.WindowShape
+
+	return nil
 }
