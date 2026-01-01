@@ -440,3 +440,291 @@ func TestDecoder_Init_ADIF_Detected(t *testing.T) {
 		t.Error("adtsHeaderPresent should be false for ADIF data")
 	}
 }
+
+// Tests for Init2() - AudioSpecificConfig parsing
+
+func TestDecoder_Init2_BasicASC(t *testing.T) {
+	// Minimal AudioSpecificConfig for AAC-LC, 44100Hz, stereo
+	// Object type: 2 (LC), SF index: 4 (44100), Channels: 2
+	//
+	// Bit layout:
+	// - 5 bits: objectType = 2 (00010)
+	// - 4 bits: samplingFrequencyIndex = 4 (0100)
+	// - 4 bits: channelConfiguration = 2 (0010)
+	// - Rest: GASpecificConfig starts
+	//
+	// Binary: 00010 0100 0010 0... = 0001 0010 0001 0...
+	// After GASpecificConfig (frameLengthFlag=0, dependsOnCoreCoder=0, extensionFlag=0):
+	// Full: 00010 0100 0010 000 = 0x12 0x10
+	asc := []byte{0x12, 0x10}
+
+	d := NewDecoder()
+	result, err := d.Init2(asc)
+
+	if err != nil {
+		t.Fatalf("Init2 failed: %v", err)
+	}
+	if result.SampleRate != 44100 {
+		t.Errorf("SampleRate: got %d, want 44100", result.SampleRate)
+	}
+	if result.Channels != 2 {
+		t.Errorf("Channels: got %d, want 2", result.Channels)
+	}
+	if result.BytesRead != 0 {
+		t.Errorf("BytesRead: got %d, want 0 for Init2", result.BytesRead)
+	}
+	if d.adtsHeaderPresent || d.adifHeaderPresent {
+		t.Error("Header present flags should be false for Init2")
+	}
+	if d.objectType != 2 {
+		t.Errorf("objectType: got %d, want 2 (LC)", d.objectType)
+	}
+	if d.sfIndex != 4 {
+		t.Errorf("sfIndex: got %d, want 4 (44100Hz)", d.sfIndex)
+	}
+	if d.channelConfiguration != 2 {
+		t.Errorf("channelConfiguration: got %d, want 2", d.channelConfiguration)
+	}
+}
+
+func TestDecoder_Init2_NilDecoder(t *testing.T) {
+	var d *Decoder
+	_, err := d.Init2([]byte{0x12, 0x10})
+	if err != ErrNilDecoder {
+		t.Errorf("expected ErrNilDecoder, got %v", err)
+	}
+}
+
+func TestDecoder_Init2_NilBuffer(t *testing.T) {
+	d := NewDecoder()
+	_, err := d.Init2(nil)
+	if err != ErrNilBuffer {
+		t.Errorf("expected ErrNilBuffer, got %v", err)
+	}
+}
+
+func TestDecoder_Init2_BufferTooSmall(t *testing.T) {
+	d := NewDecoder()
+	_, err := d.Init2([]byte{0x12})
+	if err != ErrBufferTooSmall {
+		t.Errorf("expected ErrBufferTooSmall, got %v", err)
+	}
+}
+
+func TestDecoder_Init2_InvalidObjectType(t *testing.T) {
+	// ASC with object type 0 (NULL, not supported)
+	// 5 bits: objectType = 0 (00000)
+	// 4 bits: samplingFrequencyIndex = 4 (0100)
+	// 4 bits: channelConfiguration = 2 (0010)
+	// Binary: 00000 0100 0010 0... = 0x00 0x22 (adjusted bits)
+	asc := []byte{0x02, 0x10}
+
+	d := NewDecoder()
+	_, err := d.Init2(asc)
+	if err != ErrUnsupportedObjectType {
+		t.Errorf("expected ErrUnsupportedObjectType, got %v", err)
+	}
+}
+
+func TestDecoder_Init2_SSRObjectType(t *testing.T) {
+	// ASC with object type 3 (SSR, not supported)
+	// 5 bits: objectType = 3 (00011)
+	// 4 bits: samplingFrequencyIndex = 4 (0100)
+	// 4 bits: channelConfiguration = 2 (0010)
+	// Binary: 00011 0100 0010 0... = 0x1A 0x10
+	asc := []byte{0x1A, 0x10}
+
+	d := NewDecoder()
+	_, err := d.Init2(asc)
+	if err != ErrUnsupportedObjectType {
+		t.Errorf("expected ErrUnsupportedObjectType for SSR, got %v", err)
+	}
+}
+
+func TestDecoder_Init2_MainProfile(t *testing.T) {
+	// ASC with object type 1 (Main), 48000Hz, stereo
+	// 5 bits: objectType = 1 (00001)
+	// 4 bits: samplingFrequencyIndex = 3 (0011) = 48000Hz
+	// 4 bits: channelConfiguration = 2 (0010)
+	// Binary: 00001 0011 0010 0... = 0x09 0x90
+	asc := []byte{0x09, 0x90}
+
+	d := NewDecoder()
+	result, err := d.Init2(asc)
+
+	if err != nil {
+		t.Fatalf("Init2 failed for Main profile: %v", err)
+	}
+	if result.SampleRate != 48000 {
+		t.Errorf("SampleRate: got %d, want 48000", result.SampleRate)
+	}
+	if result.Channels != 2 {
+		t.Errorf("Channels: got %d, want 2", result.Channels)
+	}
+	if d.objectType != 1 {
+		t.Errorf("objectType: got %d, want 1 (Main)", d.objectType)
+	}
+}
+
+func TestDecoder_Init2_LTPProfile(t *testing.T) {
+	// ASC with object type 4 (LTP), 32000Hz, mono
+	// 5 bits: objectType = 4 (00100)
+	// 4 bits: samplingFrequencyIndex = 5 (0101) = 32000Hz
+	// 4 bits: channelConfiguration = 1 (0001)
+	// Binary: 00100 0101 0001 0... = 0x22 0x88
+	asc := []byte{0x22, 0x88}
+
+	d := NewDecoder()
+	result, err := d.Init2(asc)
+
+	if err != nil {
+		t.Fatalf("Init2 failed for LTP profile: %v", err)
+	}
+	if result.SampleRate != 32000 {
+		t.Errorf("SampleRate: got %d, want 32000", result.SampleRate)
+	}
+	if result.Channels != 1 {
+		t.Errorf("Channels: got %d, want 1", result.Channels)
+	}
+	if d.objectType != 4 {
+		t.Errorf("objectType: got %d, want 4 (LTP)", d.objectType)
+	}
+}
+
+func TestDecoder_Init2_InvalidSampleRate(t *testing.T) {
+	// ASC with invalid sample rate index (13, 14, or 15 with no explicit frequency)
+	// Using index 13 which maps to 0 Hz
+	// 5 bits: objectType = 2 (00010)
+	// 4 bits: samplingFrequencyIndex = 13 (1101)
+	// 4 bits: channelConfiguration = 2 (0010)
+	// Binary: 00010 1101 0010 0... = 0x16 0x90
+	asc := []byte{0x16, 0x90}
+
+	d := NewDecoder()
+	_, err := d.Init2(asc)
+	if err != ErrInvalidSampleRate {
+		t.Errorf("expected ErrInvalidSampleRate, got %v", err)
+	}
+}
+
+func TestDecoder_Init2_ExplicitSampleRate(t *testing.T) {
+	// ASC with explicit sample rate (sfIndex = 15, then 24-bit sample rate)
+	// 5 bits: objectType = 2 (00010)
+	// 4 bits: samplingFrequencyIndex = 15 (1111)
+	// 24 bits: explicit sample rate = 44100 = 0x00AC44
+	// 4 bits: channelConfiguration = 2 (0010)
+	//
+	// Build as 64-bit left-aligned: 0x1780562210000000
+	// Byte 0: 0x17, Byte 1: 0x80, Byte 2: 0x56, Byte 3: 0x22, Byte 4: 0x10
+	asc := []byte{0x17, 0x80, 0x56, 0x22, 0x10}
+
+	d := NewDecoder()
+	result, err := d.Init2(asc)
+
+	if err != nil {
+		t.Fatalf("Init2 failed with explicit sample rate: %v", err)
+	}
+	if result.SampleRate != 44100 {
+		t.Errorf("SampleRate: got %d, want 44100", result.SampleRate)
+	}
+	if result.Channels != 2 {
+		t.Errorf("Channels: got %d, want 2", result.Channels)
+	}
+}
+
+func TestDecoder_Init2_FilterBankInitialized(t *testing.T) {
+	asc := []byte{0x12, 0x10} // AAC-LC, 44100Hz, stereo
+
+	d := NewDecoder()
+	_, err := d.Init2(asc)
+	if err != nil {
+		t.Fatalf("Init2 failed: %v", err)
+	}
+
+	// Filter bank should be initialized (marker set)
+	if d.fb == nil {
+		t.Error("filter bank not initialized after Init2")
+	}
+}
+
+func TestDecoder_Init2_ChannelConfigs(t *testing.T) {
+	tests := []struct {
+		name     string
+		asc      []byte
+		channels uint8
+	}{
+		// Mono: channels = 1
+		// 00010 0100 0001 0... = 0x12 0x08
+		{"mono", []byte{0x12, 0x08}, 1},
+		// Stereo: channels = 2
+		// 00010 0100 0010 0... = 0x12 0x10
+		{"stereo", []byte{0x12, 0x10}, 2},
+		// Surround 5.0: channels = 5
+		// 00010 0100 0101 0... = 0x12 0x28
+		{"5.0", []byte{0x12, 0x28}, 5},
+		// Surround 5.1: channels = 6
+		// 00010 0100 0110 0... = 0x12 0x30
+		{"5.1", []byte{0x12, 0x30}, 6},
+		// 7.1: channels = 7
+		// 00010 0100 0111 0... = 0x12 0x38
+		{"7.1", []byte{0x12, 0x38}, 7},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := NewDecoder()
+			result, err := d.Init2(tt.asc)
+			if err != nil {
+				t.Fatalf("Init2 failed: %v", err)
+			}
+			if result.Channels != tt.channels {
+				t.Errorf("Channels: got %d, want %d", result.Channels, tt.channels)
+			}
+		})
+	}
+}
+
+func TestDecoder_Init2_SampleRates(t *testing.T) {
+	tests := []struct {
+		name       string
+		sfIndex    uint8
+		sampleRate uint32
+	}{
+		{"96kHz", 0, 96000},
+		{"88.2kHz", 1, 88200},
+		{"64kHz", 2, 64000},
+		{"48kHz", 3, 48000},
+		{"44.1kHz", 4, 44100},
+		{"32kHz", 5, 32000},
+		{"24kHz", 6, 24000},
+		{"22.05kHz", 7, 22050},
+		{"16kHz", 8, 16000},
+		{"12kHz", 9, 12000},
+		{"11.025kHz", 10, 11025},
+		{"8kHz", 11, 8000},
+		{"7.35kHz", 12, 7350},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Build ASC: objectType=2 (LC), sfIndex=tt.sfIndex, channels=2
+			// 5 bits: objectType = 2 (00010)
+			// 4 bits: sfIndex
+			// 4 bits: channels = 2 (0010)
+			//
+			// Byte 0: 0001 0[sfIndex high 3 bits]
+			// Byte 1: [sfIndex low 1 bit][channels 4 bits][GASpec...]
+			byte0 := 0x10 | (tt.sfIndex >> 1)
+			byte1 := ((tt.sfIndex & 0x01) << 7) | 0x10 // channels=2 in upper nibble position
+
+			d := NewDecoder()
+			result, err := d.Init2([]byte{byte0, byte1})
+			if err != nil {
+				t.Fatalf("Init2 failed: %v", err)
+			}
+			if result.SampleRate != tt.sampleRate {
+				t.Errorf("SampleRate: got %d, want %d", result.SampleRate, tt.sampleRate)
+			}
+		})
+	}
+}

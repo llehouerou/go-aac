@@ -479,3 +479,104 @@ func canDecodeOT(objectType ObjectType) bool {
 		return false
 	}
 }
+
+// Init2 initializes the decoder from an MP4 AudioSpecificConfig.
+// This is used when decoding AAC from MP4/M4A containers.
+//
+// The ASC contains the object type, sample rate, and channel configuration
+// in a compact format. This method parses it and configures the decoder.
+//
+// Ported from: NeAACDecInit2() in ~/dev/faad2/libfaad/decoder.c:395-486
+func (d *Decoder) Init2(asc []byte) (InitResult, error) {
+	if d == nil {
+		return InitResult{}, ErrNilDecoder
+	}
+	if asc == nil {
+		return InitResult{}, ErrNilBuffer
+	}
+	if len(asc) < 2 {
+		return InitResult{}, ErrBufferTooSmall
+	}
+
+	// Clear header present flags (not ADTS or ADIF)
+	d.adtsHeaderPresent = false
+	d.adifHeaderPresent = false
+
+	// Parse the AudioSpecificConfig
+	r := bits.NewReader(asc)
+
+	mp4ASC, err := parseAudioSpecificConfig(r, uint32(len(asc)))
+	if err != nil {
+		return InitResult{}, err
+	}
+
+	// Validate object type
+	if !canDecodeOT(ObjectType(mp4ASC.objectType)) {
+		return InitResult{}, ErrUnsupportedObjectType
+	}
+
+	// Validate sample rate
+	if mp4ASC.sampleRate == 0 {
+		return InitResult{}, ErrInvalidSampleRate
+	}
+
+	// Copy to decoder state
+	d.sfIndex = mp4ASC.sfIndex
+	d.objectType = mp4ASC.objectType
+	d.channelConfiguration = mp4ASC.channelConfig
+
+	// Build result
+	result := InitResult{
+		SampleRate: mp4ASC.sampleRate,
+		Channels:   mp4ASC.channelConfig,
+		BytesRead:  0, // ASC is typically copied, not consumed
+	}
+
+	// Initialize filter bank
+	if err := d.initFilterBank(); err != nil {
+		return InitResult{}, err
+	}
+
+	return result, nil
+}
+
+// mp4AudioSpecificConfig holds parsed ASC data.
+// Local type to avoid import cycles.
+//
+// Ported from: mp4AudioSpecificConfig in ~/dev/faad2/libfaad/mp4.h:36-76
+type mp4AudioSpecificConfig struct {
+	objectType    uint8  // Audio object type (1=Main, 2=LC, etc.)
+	sfIndex       uint8  // Sample frequency index
+	sampleRate    uint32 // Actual sample rate in Hz
+	channelConfig uint8  // Channel configuration
+}
+
+// parseAudioSpecificConfig parses an MP4 AudioSpecificConfig.
+// This is a simplified local version to avoid import cycles.
+//
+// Ported from: AudioSpecificConfigFromBitfile() in ~/dev/faad2/libfaad/mp4.c:127-297
+func parseAudioSpecificConfig(r *bits.Reader, _ uint32) (*mp4AudioSpecificConfig, error) {
+	asc := &mp4AudioSpecificConfig{}
+
+	// 5 bits: audioObjectType
+	asc.objectType = uint8(r.GetBits(5))
+
+	// 4 bits: samplingFrequencyIndex
+	asc.sfIndex = uint8(r.GetBits(4))
+
+	// If sfIndex == 0x0F, read 24-bit explicit sample rate
+	if asc.sfIndex == 0x0F {
+		asc.sampleRate = r.GetBits(24)
+	} else {
+		asc.sampleRate = getSampleRate(asc.sfIndex)
+	}
+
+	// 4 bits: channelConfiguration
+	asc.channelConfig = uint8(r.GetBits(4))
+
+	// Note: We skip GASpecificConfig parsing for basic initialization.
+	// Full parsing would include frameLengthFlag, dependsOnCoreCoder, extensionFlag.
+	// For now, we use default frameLength (1024) set in NewDecoder().
+
+	return asc, nil
+}
