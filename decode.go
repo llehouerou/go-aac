@@ -33,6 +33,17 @@ func (d *Decoder) Decode(buffer []byte) (interface{}, *FrameInfo, error) {
 		return nil, nil, ErrBufferTooSmall
 	}
 
-	// TODO: Implement full decoding pipeline
-	return nil, nil, nil
+	// Initialize FrameInfo
+	info := &FrameInfo{}
+
+	// Check for ID3v1 tag (128 bytes starting with "TAG")
+	// Ported from: decoder.c:901-910
+	if len(buffer) >= 128 && buffer[0] == 'T' && buffer[1] == 'A' && buffer[2] == 'G' {
+		info.BytesConsumed = 128
+		// No error, but no output either
+		return nil, info, nil
+	}
+
+	// TODO: Continue with bitstream parsing
+	return nil, info, nil
 }
