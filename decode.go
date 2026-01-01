@@ -48,6 +48,10 @@ func (d *Decoder) Decode(buffer []byte) (interface{}, *FrameInfo, error) {
 		return nil, info, nil
 	}
 
+	// Lazy-initialize filter bank if not already done
+	// This replaces the boolean marker set by initFilterBank() with the actual filter bank
+	d.ensureFilterBank()
+
 	// Initialize bitstream reader
 	// Ported from: decoder.c:914-917
 	r := bits.NewReader(buffer)
@@ -99,6 +103,24 @@ func (d *Decoder) Decode(buffer []byte) (interface{}, *FrameInfo, error) {
 	info.Channels = rdbResult.numChannels
 	d.frame++
 	return nil, info, nil
+}
+
+// ensureFilterBank initializes the filter bank if not already done.
+// Uses lazy initialization to avoid import cycles. The filter bank factory
+// must be registered by the filterbank package during its init().
+//
+// This method checks if fb is the boolean marker (true) set by initFilterBank()
+// and replaces it with an actual filter bank instance created by the factory.
+func (d *Decoder) ensureFilterBank() {
+	// Check if already initialized (not the boolean marker and not nil)
+	if _, isMarker := d.fb.(bool); !isMarker && d.fb != nil {
+		return
+	}
+
+	// Use the registered factory to create the filter bank
+	if filterBankFactory != nil {
+		d.fb = filterBankFactory(d.frameLength)
+	}
 }
 
 // adtsFrameHeader contains the full ADTS frame header for Decode().

@@ -5,6 +5,30 @@ import (
 	"github.com/llehouerou/go-aac/internal/bits"
 )
 
+// FilterBankFactory is a function that creates a filter bank for the given frame length.
+// This is used to break the import cycle between aac and filterbank packages.
+// The factory is registered by the filterbank package during import.
+type FilterBankFactory func(frameLength uint16) any
+
+// filterBankFactory is the registered factory function for creating filter banks.
+// It's set by RegisterFilterBankFactory, typically called from filterbank package init.
+var filterBankFactory FilterBankFactory
+
+// RegisterFilterBankFactory registers the factory function for creating filter banks.
+// This is called by the filterbank package during its initialization to break
+// the import cycle between aac and filterbank.
+//
+// Usage: The filterbank package should call this in its init() function:
+//
+//	func init() {
+//	    aac.RegisterFilterBankFactory(func(frameLength uint16) any {
+//	        return NewFilterBank(frameLength)
+//	    })
+//	}
+func RegisterFilterBankFactory(factory FilterBankFactory) {
+	filterBankFactory = factory
+}
+
 // Maximum limits for decoder state arrays.
 // These match the constants in internal/syntax/limits.go but are duplicated
 // here to avoid import cycles (syntax imports aac for AudioSpecificConfig).
@@ -388,13 +412,16 @@ func (d *Decoder) initFromADTS(adts *adtsHeader, result *InitResult) (InitResult
 
 // initFilterBank initializes the filter bank for the current frame length.
 // The filter bank is stored as 'any' to avoid import cycles.
-// It will be lazily initialized using the filterbank package during decode.
+// If the factory is registered, it creates the filter bank immediately.
+// Otherwise, it sets a marker for lazy initialization during decode.
 func (d *Decoder) initFilterBank() error {
-	// Note: We can't import filterbank here due to import cycle:
-	// aac -> filterbank -> syntax -> (uses types from aac indirectly via tables)
-	// The fb field is typed as 'any' and will be initialized during first decode
-	// when we have access to the filterbank package from the decode path.
-	// For now, we set a marker value to indicate initialization was requested.
+	// If factory is registered, use it to create the filter bank immediately
+	if filterBankFactory != nil {
+		d.fb = filterBankFactory(d.frameLength)
+		return nil
+	}
+	// Otherwise, set a marker value to indicate initialization was requested.
+	// The filter bank will be created lazily during first decode.
 	d.fb = true // Marker: filter bank init requested
 	return nil
 }

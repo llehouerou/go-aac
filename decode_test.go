@@ -2,6 +2,16 @@ package aac
 
 import "testing"
 
+// mockFilterBank is a minimal mock for testing filter bank initialization.
+type mockFilterBank struct {
+	frameLength uint16
+}
+
+// testFilterBankFactory creates a mock filter bank for testing.
+func testFilterBankFactory(frameLength uint16) any {
+	return &mockFilterBank{frameLength: frameLength}
+}
+
 func TestDecoder_Decode_NilDecoder(t *testing.T) {
 	var d *Decoder
 	_, _, err := d.Decode([]byte{0xFF, 0xF1, 0x50, 0x80})
@@ -179,5 +189,47 @@ func TestDecoder_Decode_RawDataBlockParsing(t *testing.T) {
 	// frChEle should be 0 (no elements besides ID_END)
 	if d.frChEle != 0 {
 		t.Errorf("frChEle: got %d, want 0", d.frChEle)
+	}
+}
+
+func TestDecoder_Decode_FilterBankLazyInit(t *testing.T) {
+	// Register the test factory for this test
+	// Save and restore the original factory to avoid affecting other tests
+	originalFactory := filterBankFactory
+	RegisterFilterBankFactory(testFilterBankFactory)
+	defer func() { filterBankFactory = originalFactory }()
+
+	d := NewDecoder()
+	d.adtsHeaderPresent = false
+	d.sfIndex = 4              // 44100 Hz
+	d.objectType = 2           // LC
+	d.channelConfiguration = 2 // stereo
+	d.frameLength = 1024
+
+	// Before decode, fb is marker (true) or nil
+	if d.fb != nil && d.fb != true {
+		t.Error("fb should be nil or marker before decode")
+	}
+
+	// Decode minimal frame (ID_END only)
+	rawData := []byte{0xE0}
+	_, _, _ = d.Decode(rawData)
+
+	// After decode, fb should not be nil and not the boolean marker
+	if d.fb == nil {
+		t.Error("fb should not be nil after decode")
+	}
+
+	// Verify it's the mock filter bank (not the boolean marker)
+	if _, isMarker := d.fb.(bool); isMarker {
+		t.Error("fb should not be boolean marker after decode")
+	}
+
+	// Verify it's the mock type we registered
+	mock, ok := d.fb.(*mockFilterBank)
+	if !ok {
+		t.Errorf("fb should be *mockFilterBank, got %T", d.fb)
+	} else if mock.frameLength != 1024 {
+		t.Errorf("mock.frameLength: got %d, want 1024", mock.frameLength)
 	}
 }
