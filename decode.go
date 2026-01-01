@@ -107,10 +107,44 @@ func (d *Decoder) Decode(buffer []byte) (interface{}, *FrameInfo, error) {
 		return nil, nil, err
 	}
 
-	// TODO: Continue with spectral reconstruction
-	info.Channels = rdbResult.numChannels
+	// Determine output channels (downmix if configured)
+	// Ported from: decoder.c:1056-1061
+	outputChannels := rdbResult.numChannels
+	if (outputChannels == 5 || outputChannels == 6) && d.config.DownMatrix {
+		d.downMatrix = true
+		outputChannels = 2
+	}
+
+	// Create channel configuration
+	d.createChannelConfig(info)
+
+	// Populate FrameInfo
+	// Ported from: decoder.c:1075-1083
+	info.Samples = uint32(d.frameLength) * uint32(outputChannels)
+	info.Channels = outputChannels
+	info.SampleRate = getSampleRate(d.sfIndex)
+	info.ObjectType = ObjectType(d.objectType)
+	info.SBR = SBRNone
+
+	// TODO: Process each element (SCE, CPE, LFE) when parsing is implemented
+	// For each SCE: d.reconstructSCE() -> d.applyFilterBank()
+	// For each CPE: d.reconstructCPE() -> d.applyFilterBank() (x2)
+	// For each LFE: d.reconstructSCE() -> d.applyFilterBank()
+
+	// Generate PCM output
+	samples := d.generatePCMOutput(outputChannels)
+
+	// Post-decode processing
+	d.postSeekResetFlag = false
 	d.frame++
-	return nil, info, nil
+
+	// Mute first frame (overlap-add delay)
+	// Ported from: decoder.c:1204-1206
+	if d.frame <= 1 {
+		info.Samples = 0
+	}
+
+	return samples, info, nil
 }
 
 // ensureFilterBank initializes the filter bank if not already done.
