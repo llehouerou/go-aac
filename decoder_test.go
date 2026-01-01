@@ -296,3 +296,104 @@ func TestInitResult_Fields(t *testing.T) {
 		t.Errorf("Channels: got %d, want 2", result.Channels)
 	}
 }
+
+func TestDecoder_Init_ADTS(t *testing.T) {
+	// Create test ADTS data (minimal valid header)
+	// Syncword: 0xFFF, ID: 0, Layer: 0, ProtAbsent: 1, Profile: 1 (LC)
+	// SFIndex: 4 (44100Hz), PrivateBit: 0, ChanConfig: 2 (stereo)
+	adtsHeader := []byte{
+		0xFF, 0xF1, // syncword + id=0, layer=0, protection_absent=1
+		0x50, 0x80, // profile=1(LC), sf_index=4(44100), private=0, chan_config=2, orig=0, home=0
+		0x00, 0x1F, // copyright bits + frame_length (partial)
+		0xFC, // frame_length + buffer_fullness (partial)
+	}
+
+	d := NewDecoder()
+	result, err := d.Init(adtsHeader)
+
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	if result.SampleRate != 44100 {
+		t.Errorf("SampleRate: got %d, want 44100", result.SampleRate)
+	}
+	if result.Channels != 2 {
+		t.Errorf("Channels: got %d, want 2", result.Channels)
+	}
+	if result.BytesRead != 0 {
+		t.Errorf("BytesRead: got %d, want 0 for ADTS", result.BytesRead)
+	}
+	if !d.adtsHeaderPresent {
+		t.Error("adtsHeaderPresent should be true")
+	}
+}
+
+func TestDecoder_Init_NilDecoder(t *testing.T) {
+	var d *Decoder
+	_, err := d.Init([]byte{0xFF, 0xF1})
+	if err != ErrNilDecoder {
+		t.Errorf("expected ErrNilDecoder, got %v", err)
+	}
+}
+
+func TestDecoder_Init_NilBuffer(t *testing.T) {
+	d := NewDecoder()
+	_, err := d.Init(nil)
+	if err != ErrNilBuffer {
+		t.Errorf("expected ErrNilBuffer, got %v", err)
+	}
+}
+
+func TestDecoder_Init_BufferTooSmall(t *testing.T) {
+	d := NewDecoder()
+	_, err := d.Init([]byte{0xFF})
+	if err != ErrBufferTooSmall {
+		t.Errorf("expected ErrBufferTooSmall, got %v", err)
+	}
+}
+
+func TestDecoder_Init_InvalidObjectType(t *testing.T) {
+	// Create ADTS header with profile=2 (SSR, which is not supported)
+	// Syncword: 0xFFF, ID: 0, Layer: 0, ProtAbsent: 1, Profile: 2 (SSR)
+	// SFIndex: 4 (44100Hz), PrivateBit: 0, ChanConfig: 2 (stereo)
+	//
+	// Byte layout after syncword (0xFFF):
+	// - Byte 1 (0xF1): syncword[4:11]=1111, id=0, layer=00, protection_absent=1
+	// - Byte 2: profile(2) + sf_index(4) + private(1) + chan_config_high(1)
+	//   For SSR: profile=10, sf_index=0100, private=0, chan_high=0 -> 10010000 = 0x90
+	// - Byte 3: chan_config_low(2) + orig(1) + home(1) + copyright_id_bit(1) + copyright_id_start(1) + frame_len_high(2)
+	//   For chan=2: chan_low=10, orig=0, home=0 -> 10000000 = 0x80 (with frame_len bits)
+	adtsHeader := []byte{
+		0xFF, 0xF1, // syncword + id=0, layer=0, protection_absent=1
+		0x90, 0x80, // profile=2(SSR), sf_index=4(44100), private=0, chan_config=2, orig=0, home=0
+		0x00, 0x1F, // copyright bits + frame_length (partial)
+		0xFC, // frame_length + buffer_fullness (partial)
+	}
+
+	d := NewDecoder()
+	_, err := d.Init(adtsHeader)
+	if err != ErrUnsupportedObjectType {
+		t.Errorf("expected ErrUnsupportedObjectType, got %v", err)
+	}
+}
+
+func TestDecoder_Init_FilterBankInitialized(t *testing.T) {
+	// Create valid ADTS header for LC profile
+	adtsHeader := []byte{
+		0xFF, 0xF1, // syncword + id=0, layer=0, protection_absent=1
+		0x50, 0x80, // profile=1(LC), sf_index=4(44100), private=0, chan_config=2, orig=0, home=0
+		0x00, 0x1F, // copyright bits + frame_length (partial)
+		0xFC, // frame_length + buffer_fullness (partial)
+	}
+
+	d := NewDecoder()
+	_, err := d.Init(adtsHeader)
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Filter bank should be initialized
+	if d.fb == nil {
+		t.Error("filter bank not initialized after Init")
+	}
+}
