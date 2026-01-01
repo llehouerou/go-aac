@@ -99,6 +99,12 @@ func (d *Decoder) Decode(buffer []byte) (interface{}, *FrameInfo, error) {
 		return nil, info, nil
 	}
 
+	// Allocate channel buffers if needed
+	// Ported from: allocate_single_channel() and allocate_channel_pair() in decoder.c
+	if err := d.allocateChannelBuffers(rdbResult.numChannels); err != nil {
+		return nil, nil, err
+	}
+
 	// TODO: Continue with spectral reconstruction
 	info.Channels = rdbResult.numChannels
 	d.frame++
