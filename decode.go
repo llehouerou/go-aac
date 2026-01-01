@@ -491,6 +491,48 @@ func (d *Decoder) reconstructCPE(cpe *cpeParseResult, channelBase uint8) error {
 	return nil
 }
 
+// generatePCMOutput converts time-domain samples to PCM format.
+//
+// Parameters:
+//   - outputChannels: Number of channels to output
+//
+// Returns the PCM samples in the format specified by d.config.OutputFormat.
+// The returned type depends on the format:
+//   - OutputFormat16Bit: []int16
+//   - OutputFormat24Bit: []int32 (packed 24-bit in 32-bit container)
+//   - OutputFormat32Bit: []int32
+//   - OutputFormatFloat: []float32
+//   - OutputFormatDouble: []float64
+//
+// Ported from: output_to_PCM() call in ~/dev/faad2/libfaad/decoder.c:1188-1189
+//
+//nolint:unused // Infrastructure for future decoding
+func (d *Decoder) generatePCMOutput(outputChannels uint8) interface{} {
+	// For now, just convert float32 to int16 directly
+	// This will be replaced with proper output package integration
+
+	samples := make([]int16, int(d.frameLength)*int(outputChannels))
+
+	for ch := uint8(0); ch < outputChannels; ch++ {
+		if d.timeOut[ch] == nil {
+			continue
+		}
+		for i := 0; i < int(d.frameLength); i++ {
+			sample := d.timeOut[ch][i]
+			// Clip and convert to int16
+			if sample > 32767.0 {
+				sample = 32767.0
+			} else if sample < -32768.0 {
+				sample = -32768.0
+			}
+			// Interleave: sample[i*numCh + ch]
+			samples[i*int(outputChannels)+int(ch)] = int16(sample)
+		}
+	}
+
+	return samples
+}
+
 // applyFilterBank applies the inverse filter bank (IMDCT + windowing + overlap-add).
 //
 // Parameters:
