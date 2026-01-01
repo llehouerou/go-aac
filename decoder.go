@@ -267,9 +267,16 @@ func (d *Decoder) Init(data []byte) (InitResult, error) {
 		Channels:   1,
 	}
 
+	// Check for ADIF header ("ADIF" magic) first
+	// ADIF is rare but must be detected before trying ADTS syncword search
+	// Ported from: NeAACDecInit() ADIF check in ~/dev/faad2/libfaad/decoder.c:307-338
+	if len(data) >= 4 && data[0] == 'A' && data[1] == 'D' && data[2] == 'I' && data[3] == 'F' {
+		return d.initFromADIF(data)
+	}
+
 	r := bits.NewReader(data)
 
-	// Try ADTS parsing first (most common format)
+	// Try ADTS parsing (most common format)
 	adts, err := parseADTSHeader(r, d.config.UseOldADTSFormat)
 	if err == nil {
 		return d.initFromADTS(adts, &result)
@@ -328,6 +335,22 @@ func parseADTSHeader(r *bits.Reader, oldFormat bool) (*adtsHeader, error) {
 		r.FlushBits(8)
 	}
 	return nil, ErrADTSSyncwordNotFound
+}
+
+// initFromADIF initializes the decoder from an ADIF header.
+// ADIF (Audio Data Interchange Format) is a container format that stores
+// a single audio program with a header at the beginning of the file.
+// It's much rarer than ADTS but must be detected and handled.
+//
+// For now, we detect ADIF and return ErrADIFNotSupported.
+// Full ADIF support requires parsing the Program Config Element (PCE).
+//
+// Ported from: NeAACDecInit() ADIF handling in ~/dev/faad2/libfaad/decoder.c:307-338
+func (d *Decoder) initFromADIF(_ []byte) (InitResult, error) {
+	d.adifHeaderPresent = true
+	// ADIF format is rare; return unsupported for now
+	// Full implementation would parse PCE from the ADIF header
+	return InitResult{}, ErrADIFNotSupported
 }
 
 // initFromADTS initializes the decoder from a parsed ADTS header.

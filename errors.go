@@ -49,6 +49,7 @@ const (
 	ErrBufferTooSmall        Error = 37 // buffer too small (< 2 bytes)
 	ErrUnsupportedObjectType Error = 38 // unsupported audio object type
 	ErrInvalidSampleRate     Error = 39 // invalid sample rate (0)
+	ErrADIFNotSupported      Error = 40 // ADIF format not yet supported
 )
 
 // errMessages contains error messages matching FAAD2 exactly.
@@ -94,6 +95,7 @@ var errMessages = map[Error]string{
 	37: "buffer too small",
 	38: "unsupported audio object type",
 	39: "invalid sample rate",
+	40: "ADIF format not yet supported",
 }
 
 // Error implements the error interface.

@@ -397,3 +397,46 @@ func TestDecoder_Init_FilterBankInitialized(t *testing.T) {
 		t.Error("filter bank not initialized after Init")
 	}
 }
+
+func TestDecoder_Init_ADIF_NotSet_For_ADTS(t *testing.T) {
+	// Verify that ADTS data does NOT set adifHeaderPresent
+	d := NewDecoder()
+
+	// ADTS data (not ADIF)
+	adtsData := []byte{0xFF, 0xF1, 0x50, 0x80, 0x00, 0x1F, 0xFC}
+	_, err := d.Init(adtsData)
+
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	if d.adifHeaderPresent {
+		t.Error("adifHeaderPresent should be false for ADTS data")
+	}
+	if !d.adtsHeaderPresent {
+		t.Error("adtsHeaderPresent should be true for ADTS data")
+	}
+}
+
+func TestDecoder_Init_ADIF_Detected(t *testing.T) {
+	// Create minimal ADIF header with "ADIF" magic
+	// ADIF format is rare and complex; for now we just detect and return an error
+	adifData := []byte{
+		'A', 'D', 'I', 'F', // Magic signature
+		0x00, // copyright_id_present = 0
+		// Additional fields would follow but we only detect magic for now
+	}
+
+	d := NewDecoder()
+	_, err := d.Init(adifData)
+
+	// ADIF should be detected (returns ErrADIFNotSupported for now)
+	if err != ErrADIFNotSupported {
+		t.Errorf("expected ErrADIFNotSupported for ADIF data, got %v", err)
+	}
+	if !d.adifHeaderPresent {
+		t.Error("adifHeaderPresent should be true for ADIF data")
+	}
+	if d.adtsHeaderPresent {
+		t.Error("adtsHeaderPresent should be false for ADIF data")
+	}
+}
