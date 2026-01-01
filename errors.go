@@ -105,3 +105,13 @@ func (e Error) Error() string {
 	}
 	return "unknown error"
 }
+
+// GetErrorMessage returns the error message for an error code.
+// Returns "unknown error" for invalid codes.
+// Ported from: NeAACDecGetErrorMessage() in ~/dev/faad2/libfaad/decoder.c:89-94
+func GetErrorMessage(errcode Error) string {
+	if msg, ok := errMessages[errcode]; ok {
+		return msg
+	}
+	return "unknown error"
+}

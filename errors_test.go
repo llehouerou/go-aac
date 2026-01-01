@@ -98,3 +98,22 @@ func TestInitErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestGetErrorMessage(t *testing.T) {
+	tests := []struct {
+		code Error
+		want string
+	}{
+		{ErrNone, "No error"},
+		{ErrGainControlNotImplemented, "Gain control not yet implemented"},
+		{ErrInvalidNumChannels, "Invalid number of channels"},
+		{Error(255), "unknown error"}, // Unknown error code
+	}
+
+	for _, tt := range tests {
+		got := GetErrorMessage(tt.code)
+		if got != tt.want {
+			t.Errorf("GetErrorMessage(%d) = %q, want %q", tt.code, got, tt.want)
+		}
+	}
+}
