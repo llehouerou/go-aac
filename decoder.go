@@ -567,6 +567,32 @@ func (d *Decoder) Init2(asc []byte) (InitResult, error) {
 	return result, nil
 }
 
+// SimpleInit initializes the decoder and returns sample rate and channels directly.
+// This is a convenience wrapper around Init() that matches the simplified API
+// specified in MIGRATION_STEPS.md Step 7.4.
+//
+// For more detailed initialization info (e.g., bytes consumed for ADIF),
+// use Init() which returns an InitResult struct.
+func (d *Decoder) SimpleInit(data []byte) (sampleRate uint32, channels uint8, err error) {
+	result, err := d.Init(data)
+	if err != nil {
+		return 0, 0, err
+	}
+	return result.SampleRate, result.Channels, nil
+}
+
+// SimpleInit2 initializes the decoder from an AudioSpecificConfig.
+// This is a convenience wrapper around Init2() that matches the simplified API.
+//
+// For more detailed initialization info, use Init2() which returns an InitResult.
+func (d *Decoder) SimpleInit2(asc []byte) (sampleRate uint32, channels uint8, err error) {
+	result, err := d.Init2(asc)
+	if err != nil {
+		return 0, 0, err
+	}
+	return result.SampleRate, result.Channels, nil
+}
+
 // mp4AudioSpecificConfig holds parsed ASC data.
 // Local type to avoid import cycles.
 //

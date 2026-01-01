@@ -783,3 +783,41 @@ func TestDecoder_Init2_MultipleCalls(t *testing.T) {
 		t.Errorf("second Init2: expected 48000, got %d", result2.SampleRate)
 	}
 }
+
+func TestDecoder_SimpleInit(t *testing.T) {
+	// Valid ADTS header: LC, 44100Hz, stereo
+	adtsHeader := []byte{
+		0xFF, 0xF1, 0x50, 0x80, 0x00, 0x1F, 0xFC,
+	}
+
+	d := NewDecoder()
+	sampleRate, channels, err := d.SimpleInit(adtsHeader)
+
+	if err != nil {
+		t.Fatalf("SimpleInit failed: %v", err)
+	}
+	if sampleRate != 44100 {
+		t.Errorf("sampleRate: got %d, want 44100", sampleRate)
+	}
+	if channels != 2 {
+		t.Errorf("channels: got %d, want 2", channels)
+	}
+}
+
+func TestDecoder_SimpleInit2(t *testing.T) {
+	// AAC-LC, 44100Hz, stereo (object=2, sfIndex=4, channels=2)
+	asc := []byte{0x12, 0x10}
+
+	d := NewDecoder()
+	sampleRate, channels, err := d.SimpleInit2(asc)
+
+	if err != nil {
+		t.Fatalf("SimpleInit2 failed: %v", err)
+	}
+	if sampleRate != 44100 {
+		t.Errorf("sampleRate: got %d, want 44100", sampleRate)
+	}
+	if channels != 2 {
+		t.Errorf("channels: got %d, want 2", channels)
+	}
+}
