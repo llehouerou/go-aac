@@ -78,6 +78,34 @@ const (
 // Source: ~/dev/faad2/include/neaacdec.h:135
 const MinStreamSize = 768 // 6144 bits/channel
 
+// Capability represents decoder capabilities as a bitmask.
+// Source: ~/dev/faad2/include/neaacdec.h:105-111
+type Capability uint32
+
+// Decoder capabilities.
+const (
+	CapabilityLC   Capability = 1 << 0 // Can decode AAC-LC
+	CapabilityMain Capability = 1 << 1 // Can decode AAC Main
+	CapabilityLTP  Capability = 1 << 2 // Can decode AAC LTP
+	CapabilityLD   Capability = 1 << 3 // Can decode AAC LD
+	CapabilityER   Capability = 1 << 4 // Can decode Error Resilient
+)
+
+// version is the library version string.
+const version = "1.0.0"
+
+// Version returns the library version string.
+// Ported from: NeAACDecGetVersion() in ~/dev/faad2/libfaad/decoder.c:71-87
+func Version() string {
+	return version
+}
+
+// GetCapabilities returns a bitmask of supported decoder capabilities.
+// Ported from: NeAACDecGetCapabilities() in ~/dev/faad2/libfaad/decoder.c:96-120
+func GetCapabilities() Capability {
+	return CapabilityLC | CapabilityMain | CapabilityLTP | CapabilityLD | CapabilityER
+}
+
 // Config contains decoder configuration options.
 // Source: ~/dev/faad2/include/neaacdec.h:163-171
 type Config struct {

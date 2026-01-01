@@ -143,3 +143,38 @@ func TestFrameInfoFields(t *testing.T) {
 		t.Errorf("ChannelPosition array size = %d, want 64", got)
 	}
 }
+
+func TestVersion(t *testing.T) {
+	version := Version()
+	if version == "" {
+		t.Error("Version() returned empty string")
+	}
+}
+
+func TestGetCapabilities(t *testing.T) {
+	caps := GetCapabilities()
+	// Must support LC at minimum
+	if caps&CapabilityLC == 0 {
+		t.Error("GetCapabilities() must include LC capability")
+	}
+}
+
+func TestCapabilityConstants(t *testing.T) {
+	// Verify capability bits match FAAD2 neaacdec.h:106-111
+	tests := []struct {
+		name string
+		got  Capability
+		want Capability
+	}{
+		{"LC_DEC_CAP", CapabilityLC, 1 << 0},
+		{"MAIN_DEC_CAP", CapabilityMain, 1 << 1},
+		{"LTP_DEC_CAP", CapabilityLTP, 1 << 2},
+		{"LD_DEC_CAP", CapabilityLD, 1 << 3},
+		{"ERROR_RESILIENCE_CAP", CapabilityER, 1 << 4},
+	}
+	for _, tt := range tests {
+		if tt.got != tt.want {
+			t.Errorf("%s = %d, want %d", tt.name, tt.got, tt.want)
+		}
+	}
+}
