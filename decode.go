@@ -533,6 +533,102 @@ func (d *Decoder) generatePCMOutput(outputChannels uint8) interface{} {
 	return samples
 }
 
+// createChannelConfig creates the channel position mapping.
+//
+// Standard AAC channel configurations:
+//
+//	1: C (mono)
+//	2: L, R (stereo)
+//	3: C, L, R
+//	4: C, L, R, Cs (rear center)
+//	5: C, L, R, Ls, Rs
+//	6: C, L, R, Ls, Rs, LFE (5.1)
+//	7: C, L, R, Ls, Rs, Lrs, Rrs, LFE (7.1)
+//
+// Ported from: create_channel_config() in ~/dev/faad2/libfaad/decoder.c:598-819
+//
+//nolint:unused
+func (d *Decoder) createChannelConfig(info *FrameInfo) {
+	info.NumFrontChannels = 0
+	info.NumSideChannels = 0
+	info.NumBackChannels = 0
+	info.NumLFEChannels = 0
+
+	// Clear channel positions
+	for i := range info.ChannelPosition {
+		info.ChannelPosition[i] = ChannelUnknown
+	}
+
+	// Handle downmix to stereo
+	if d.downMatrix {
+		info.NumFrontChannels = 2
+		info.ChannelPosition[0] = ChannelFrontLeft
+		info.ChannelPosition[1] = ChannelFrontRight
+		return
+	}
+
+	// TODO: Handle PCE-based channel config when pceSet is true
+	// For now, only standard channel configurations are supported
+
+	// Standard channel configurations
+	switch d.channelConfiguration {
+	case 1: // mono
+		info.NumFrontChannels = 1
+		info.ChannelPosition[0] = ChannelFrontCenter
+	case 2: // stereo
+		info.NumFrontChannels = 2
+		info.ChannelPosition[0] = ChannelFrontLeft
+		info.ChannelPosition[1] = ChannelFrontRight
+	case 3: // 3.0
+		info.NumFrontChannels = 3
+		info.ChannelPosition[0] = ChannelFrontCenter
+		info.ChannelPosition[1] = ChannelFrontLeft
+		info.ChannelPosition[2] = ChannelFrontRight
+	case 4: // 4.0
+		info.NumFrontChannels = 3
+		info.NumBackChannels = 1
+		info.ChannelPosition[0] = ChannelFrontCenter
+		info.ChannelPosition[1] = ChannelFrontLeft
+		info.ChannelPosition[2] = ChannelFrontRight
+		info.ChannelPosition[3] = ChannelBackCenter
+	case 5: // 5.0
+		info.NumFrontChannels = 3
+		info.NumBackChannels = 2
+		info.ChannelPosition[0] = ChannelFrontCenter
+		info.ChannelPosition[1] = ChannelFrontLeft
+		info.ChannelPosition[2] = ChannelFrontRight
+		info.ChannelPosition[3] = ChannelBackLeft
+		info.ChannelPosition[4] = ChannelBackRight
+	case 6: // 5.1
+		info.NumFrontChannels = 3
+		info.NumBackChannels = 2
+		info.NumLFEChannels = 1
+		info.ChannelPosition[0] = ChannelFrontCenter
+		info.ChannelPosition[1] = ChannelFrontLeft
+		info.ChannelPosition[2] = ChannelFrontRight
+		info.ChannelPosition[3] = ChannelBackLeft
+		info.ChannelPosition[4] = ChannelBackRight
+		info.ChannelPosition[5] = ChannelLFE
+	case 7: // 7.1
+		info.NumFrontChannels = 3
+		info.NumSideChannels = 2
+		info.NumBackChannels = 2
+		info.NumLFEChannels = 1
+		info.ChannelPosition[0] = ChannelFrontCenter
+		info.ChannelPosition[1] = ChannelFrontLeft
+		info.ChannelPosition[2] = ChannelFrontRight
+		info.ChannelPosition[3] = ChannelSideLeft
+		info.ChannelPosition[4] = ChannelSideRight
+		info.ChannelPosition[5] = ChannelBackLeft
+		info.ChannelPosition[6] = ChannelBackRight
+		info.ChannelPosition[7] = ChannelLFE
+	default:
+		// Configuration 0 or >7: channels defined by elements in bitstream
+		// TODO: Implement fallback channel config based on fr_channels and has_lfe
+		// For now, leave channel positions as ChannelUnknown
+	}
+}
+
 // applyFilterBank applies the inverse filter bank (IMDCT + windowing + overlap-add).
 //
 // Parameters:
