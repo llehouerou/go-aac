@@ -19,7 +19,15 @@ package filterbank
 
 import (
 	"github.com/llehouerou/go-aac/internal/mdct"
-	"github.com/llehouerou/go-aac/internal/syntax"
+)
+
+// Window sequence constants (local copies to avoid import cycle).
+// Source: ~/dev/faad2/libfaad/syntax.h:96-99
+const (
+	OnlyLongSequence   uint8 = 0x0
+	LongStartSequence  uint8 = 0x1
+	EightShortSequence uint8 = 0x2
+	LongStopSequence   uint8 = 0x3
 )
 
 // FilterBank holds state for inverse filter bank operations.
@@ -67,7 +75,7 @@ func NewFilterBank(frameLen uint16) *FilterBank {
 //
 // Ported from: ifilter_bank() in ~/dev/faad2/libfaad/filtbank.c:164-334
 func (fb *FilterBank) IFilterBank(
-	windowSequence syntax.WindowSequence,
+	windowSequence uint8,
 	windowShape uint8,
 	windowShapePrev uint8,
 	freqIn []float32,
@@ -87,7 +95,7 @@ func (fb *FilterBank) IFilterBank(
 	windowShortPrev := GetShortWindow(int(windowShapePrev))
 
 	switch windowSequence {
-	case syntax.OnlyLongSequence:
+	case OnlyLongSequence:
 		// Perform IMDCT
 		fb.mdct2048.IMDCT(freqIn, transfBuf)
 
@@ -103,7 +111,7 @@ func (fb *FilterBank) IFilterBank(
 			overlap[i] = transfBuf[nlong+i] * windowLong[nlong-1-i]
 		}
 
-	case syntax.LongStartSequence:
+	case LongStartSequence:
 		// Perform IMDCT
 		fb.mdct2048.IMDCT(freqIn, transfBuf)
 
@@ -124,7 +132,7 @@ func (fb *FilterBank) IFilterBank(
 			overlap[nflat_ls+nshort+i] = 0
 		}
 
-	case syntax.LongStopSequence:
+	case LongStopSequence:
 		// Perform IMDCT
 		fb.mdct2048.IMDCT(freqIn, transfBuf)
 
@@ -145,7 +153,7 @@ func (fb *FilterBank) IFilterBank(
 			overlap[i] = transfBuf[nlong+i] * windowLong[nlong-1-i]
 		}
 
-	case syntax.EightShortSequence:
+	case EightShortSequence:
 		trans := nshort / 2
 
 		// Perform IMDCT for each of the 8 short blocks
@@ -220,7 +228,7 @@ func (fb *FilterBank) IFilterBank(
 //
 // Ported from: filter_bank_ltp() in ~/dev/faad2/libfaad/filtbank.c:337-408
 func (fb *FilterBank) FilterBankLTP(
-	windowSequence syntax.WindowSequence,
+	windowSequence uint8,
 	windowShape uint8,
 	windowShapePrev uint8,
 	inData []float32,
@@ -246,7 +254,7 @@ func (fb *FilterBank) FilterBankLTP(
 	transfBuf := fb.transfBuf
 
 	switch windowSequence {
-	case syntax.OnlyLongSequence:
+	case OnlyLongSequence:
 		// Window first half with previous window (ascending)
 		// Window second half with current window (descending)
 		// Ported from: filtbank.c:374-380
@@ -259,7 +267,7 @@ func (fb *FilterBank) FilterBankLTP(
 		// Copy only the first nlong coefficients to output
 		copy(outMDCT, transfBuf[:nlong])
 
-	case syntax.LongStartSequence:
+	case LongStartSequence:
 		// First half: window with long_prev (ascending)
 		// Second half: flat region + short window + zeros
 		// Ported from: filtbank.c:383-393
@@ -282,7 +290,7 @@ func (fb *FilterBank) FilterBankLTP(
 		fb.mdct2048.Forward(windowedBuf[:2*nlong], transfBuf[:2*nlong])
 		copy(outMDCT, transfBuf[:nlong])
 
-	case syntax.LongStopSequence:
+	case LongStopSequence:
 		// First half: zeros + short_prev window + flat region
 		// Second half: window with long (descending)
 		// Ported from: filtbank.c:395-405
@@ -305,7 +313,7 @@ func (fb *FilterBank) FilterBankLTP(
 		fb.mdct2048.Forward(windowedBuf[:2*nlong], transfBuf[:2*nlong])
 		copy(outMDCT, transfBuf[:nlong])
 
-	case syntax.EightShortSequence:
+	case EightShortSequence:
 		panic("EightShortSequence is not supported for LTP")
 
 	default:

@@ -490,3 +490,62 @@ func (d *Decoder) reconstructCPE(cpe *cpeParseResult, channelBase uint8) error {
 
 	return nil
 }
+
+// applyFilterBank applies the inverse filter bank (IMDCT + windowing + overlap-add).
+//
+// Parameters:
+//   - specData: Spectral coefficients (float32)
+//   - channel: Channel index for accessing overlap buffers
+//   - windowSequence: Window type (0=long, 1=long_start, 2=8-short, 3=long_stop)
+//   - windowShape: Window shape for current frame
+//
+// The filter bank performs:
+// 1. IMDCT (Modified Discrete Cosine Transform inverse)
+// 2. Windowing with overlap-add
+// 3. Writes output to d.timeOut[channel]
+//
+// Ported from: ifilter_bank() in ~/dev/faad2/libfaad/filtbank.c
+//
+//nolint:unused // Infrastructure for future decoding
+func (d *Decoder) applyFilterBank(
+	specData []float32,
+	channel uint8,
+	windowSequence uint8,
+	windowShape uint8,
+) error {
+	// Ensure filter bank is initialized
+	if d.fb == nil {
+		return ErrNilDecoder // Filter bank not initialized
+	}
+
+	// Type-assert to access IFilterBank method
+	// The actual type is *filterbank.FilterBank registered via factory
+	// WindowSequence is defined as uint8 in internal/syntax/constants.go
+	type filterBankInterface interface {
+		IFilterBank(
+			windowSequence uint8,
+			windowShape uint8,
+			windowShapePrev uint8,
+			freqIn []float32,
+			timeOut []float32,
+			overlap []float32,
+		)
+	}
+
+	fb, ok := d.fb.(filterBankInterface)
+	if !ok {
+		return ErrNilDecoder // Filter bank not properly initialized
+	}
+
+	// Apply inverse filter bank
+	fb.IFilterBank(
+		windowSequence,
+		windowShape,
+		d.windowShapePrev[channel],
+		specData,
+		d.timeOut[channel],
+		d.fbIntermed[channel],
+	)
+
+	return nil
+}

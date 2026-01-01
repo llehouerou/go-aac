@@ -3,8 +3,6 @@ package filterbank
 import (
 	"math"
 	"testing"
-
-	"github.com/llehouerou/go-aac/internal/syntax"
 )
 
 func TestNewFilterBank(t *testing.T) {
@@ -37,7 +35,7 @@ func TestIFilterBank_OnlyLongSequence(t *testing.T) {
 
 	// Process one frame
 	fb.IFilterBank(
-		syntax.OnlyLongSequence,
+		OnlyLongSequence,
 		SineWindow, // window_shape
 		SineWindow, // window_shape_prev
 		freqIn,
@@ -71,10 +69,10 @@ func TestIFilterBank_LongStartSequence(t *testing.T) {
 	overlap := make([]float32, 1024)
 
 	// First, process with ONLY_LONG to initialize overlap
-	fb.IFilterBank(syntax.OnlyLongSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(OnlyLongSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
 
 	// Now test LONG_START_SEQUENCE
-	fb.IFilterBank(syntax.LongStartSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(LongStartSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
 
 	// The overlap structure for LONG_START should have:
 	// - First nflat_ls samples: direct values (no windowing)
@@ -116,7 +114,7 @@ func TestIFilterBank_LongStopSequence(t *testing.T) {
 		overlap[i] = float32(i) // values in flat region after short
 	}
 
-	fb.IFilterBank(syntax.LongStopSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(LongStopSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
 
 	// After LONG_STOP, the overlap should be full long window style
 	allZero := true
@@ -153,7 +151,7 @@ func TestIFilterBank_EightShortSequence(t *testing.T) {
 		overlap[i] = float32(i % 100)
 	}
 
-	fb.IFilterBank(syntax.EightShortSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(EightShortSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
 
 	// timeOut should have valid data
 	allZero := true
@@ -182,13 +180,13 @@ func TestIFilterBank_WindowTransitionLongToShort(t *testing.T) {
 	// Simulate: ONLY_LONG -> LONG_START -> EIGHT_SHORT
 
 	// Frame 1: ONLY_LONG
-	fb.IFilterBank(syntax.OnlyLongSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(OnlyLongSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
 
 	// Frame 2: LONG_START (transition to short)
-	fb.IFilterBank(syntax.LongStartSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(LongStartSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
 
 	// Frame 3: EIGHT_SHORT
-	fb.IFilterBank(syntax.EightShortSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(EightShortSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
 
 	// Verify no panics and output is reasonable
 	if len(timeOut) != 1024 {
@@ -209,11 +207,11 @@ func TestIFilterBank_WindowTransitionShortToLong(t *testing.T) {
 
 	// Simulate: ONLY_LONG -> LONG_START -> EIGHT_SHORT -> LONG_STOP -> ONLY_LONG
 
-	fb.IFilterBank(syntax.OnlyLongSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
-	fb.IFilterBank(syntax.LongStartSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
-	fb.IFilterBank(syntax.EightShortSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
-	fb.IFilterBank(syntax.LongStopSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
-	fb.IFilterBank(syntax.OnlyLongSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(OnlyLongSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(LongStartSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(EightShortSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(LongStopSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(OnlyLongSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
 
 	// Verify no panics and output is reasonable
 	if len(timeOut) != 1024 {
@@ -233,10 +231,10 @@ func TestIFilterBank_MixedWindowShapes(t *testing.T) {
 	overlap := make([]float32, 1024)
 
 	// Test transitioning between sine and KBD windows
-	fb.IFilterBank(syntax.OnlyLongSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
-	fb.IFilterBank(syntax.OnlyLongSequence, KBDWindow, SineWindow, freqIn, timeOut, overlap)
-	fb.IFilterBank(syntax.OnlyLongSequence, KBDWindow, KBDWindow, freqIn, timeOut, overlap)
-	fb.IFilterBank(syntax.OnlyLongSequence, SineWindow, KBDWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(OnlyLongSequence, SineWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(OnlyLongSequence, KBDWindow, SineWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(OnlyLongSequence, KBDWindow, KBDWindow, freqIn, timeOut, overlap)
+	fb.IFilterBank(OnlyLongSequence, SineWindow, KBDWindow, freqIn, timeOut, overlap)
 
 	// Verify no panics
 	if len(timeOut) != 1024 {
@@ -258,7 +256,7 @@ func TestFilterBankLTP_OnlyLongSequence(t *testing.T) {
 
 	// Call FilterBankLTP
 	fb.FilterBankLTP(
-		syntax.OnlyLongSequence,
+		OnlyLongSequence,
 		SineWindow, // window_shape
 		SineWindow, // window_shape_prev
 		inData,
@@ -297,7 +295,7 @@ func TestFilterBankLTP_LongStartSequence(t *testing.T) {
 
 	// Should not panic
 	fb.FilterBankLTP(
-		syntax.LongStartSequence,
+		LongStartSequence,
 		SineWindow,
 		SineWindow,
 		inData,
@@ -336,7 +334,7 @@ func TestFilterBankLTP_LongStopSequence(t *testing.T) {
 
 	// Should not panic
 	fb.FilterBankLTP(
-		syntax.LongStopSequence,
+		LongStopSequence,
 		SineWindow,
 		SineWindow,
 		inData,
@@ -376,7 +374,7 @@ func TestFilterBankLTP_EightShortSequence_Panics(t *testing.T) {
 	}()
 
 	fb.FilterBankLTP(
-		syntax.EightShortSequence,
+		EightShortSequence,
 		SineWindow,
 		SineWindow,
 		inData,
@@ -396,15 +394,15 @@ func TestFilterBankLTP_MixedWindowShapes(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		windowSeq       syntax.WindowSequence
+		windowSeq       uint8
 		windowShape     uint8
 		windowShapePrev uint8
 	}{
-		{"OnlyLong_Sine_KBD", syntax.OnlyLongSequence, SineWindow, KBDWindow},
-		{"OnlyLong_KBD_Sine", syntax.OnlyLongSequence, KBDWindow, SineWindow},
-		{"OnlyLong_KBD_KBD", syntax.OnlyLongSequence, KBDWindow, KBDWindow},
-		{"LongStart_Sine_KBD", syntax.LongStartSequence, SineWindow, KBDWindow},
-		{"LongStop_KBD_Sine", syntax.LongStopSequence, KBDWindow, SineWindow},
+		{"OnlyLong_Sine_KBD", OnlyLongSequence, SineWindow, KBDWindow},
+		{"OnlyLong_KBD_Sine", OnlyLongSequence, KBDWindow, SineWindow},
+		{"OnlyLong_KBD_KBD", OnlyLongSequence, KBDWindow, KBDWindow},
+		{"LongStart_Sine_KBD", LongStartSequence, SineWindow, KBDWindow},
+		{"LongStop_KBD_Sine", LongStopSequence, KBDWindow, SineWindow},
 	}
 
 	for _, tc := range testCases {
@@ -443,7 +441,7 @@ func TestFilterBank_RoundTrip_LTP(t *testing.T) {
 	// Forward transform: time -> freq
 	freqCoeffs := make([]float32, 1024)
 	fb.FilterBankLTP(
-		syntax.OnlyLongSequence,
+		OnlyLongSequence,
 		SineWindow,
 		SineWindow,
 		input,
@@ -454,7 +452,7 @@ func TestFilterBank_RoundTrip_LTP(t *testing.T) {
 	timeOut := make([]float32, 1024)
 	overlap := make([]float32, 1024)
 	fb.IFilterBank(
-		syntax.OnlyLongSequence,
+		OnlyLongSequence,
 		SineWindow,
 		SineWindow,
 		freqCoeffs,
